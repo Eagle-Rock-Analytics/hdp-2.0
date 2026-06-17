@@ -1,19 +1,19 @@
 """
 stationlist_generator.py
 
-Generates the "all network" station list, using the "per network" station lists. Functionality to generate for each stage of development 
-(pull, clean, qa/qc, and merge). To replace the "station list" generation in the figure notebooks. 
+Generates the "all network" station list, using the "per network" station lists. Functionality to generate for each stage of development
+(pull, clean, qa/qc, and merge). To replace the "station list" generation in the figure notebooks.
 
 Functions
 ---------
 - get_station_list_paths: Builds a dictionary of all stationlists within a sublevel of s3 bucket
-- retrieve_and_concat_stnlists: Retrieves the stationlists using the paths dictionary, and concats together. 
+- retrieve_and_concat_stnlists: Retrieves the stationlists using the paths dictionary, and concats together.
 - export_stationlist: Helper function to export final csv file
 - generate_stationlist: Core processing function
 
 Intended Use
 -------------
-Run this script after the corresponding "stnlist_update" script has been completed for all networks in the respective stage of development. 
+Run this script after the corresponding "stnlist_update" script has been completed for all networks in the respective stage of development.
 """
 
 import os
@@ -21,13 +21,13 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import boto3
-import pandas as pd
-import numpy as np
 import datetime
-from io import BytesIO, StringIO
+from io import BytesIO
 
-from paths import BUCKET_NAME, RAW_WX, CLEAN_WX, QAQC_WX, MERGE_WX
+import boto3
+import numpy as np
+import pandas as pd
+from paths import BUCKET_NAME, CLEAN_WX, MERGE_WX, QAQC_WX, RAW_WX
 
 PULL_DIR = f"{RAW_WX}/"
 CLEAN_DIR = f"{CLEAN_WX}/"
@@ -183,7 +183,7 @@ def retrieve_and_concat_stnlists(directory: str, option: str) -> pd.DataFrame:
         )
         exit()
 
-    for index, row in networks.iterrows():
+    for _index, row in networks.iterrows():
         # Get data
         df = pd.DataFrame()
         obj = s3_cl.get_object(Bucket=BUCKET_NAME, Key=row["StationFile"])  # get file
@@ -213,7 +213,7 @@ def retrieve_and_concat_stnlists(directory: str, option: str) -> pd.DataFrame:
                     colname = [col for col in temp.columns if "name" in col]
                     if len(colname) > 1:
                         # If more than one col returned
-                        removelist = set(["countyname"])
+                        removelist = {"countyname"}
                         # Use sets to exclude partial matches (e.g. 'name' in 'countyname')
                         colname = list(set(colname) - removelist)
                         if len(colname) > 1:
@@ -235,7 +235,7 @@ def retrieve_and_concat_stnlists(directory: str, option: str) -> pd.DataFrame:
             if any("lat" in str for str in temp.columns):
                 colname = [col for col in temp.columns if "lat" in col]
                 if len(colname) > 1:  # If more than one col returned
-                    removelist = set([])
+                    removelist = set()
                     colname = list(set(colname) - removelist)
                 df["latitude"] = temp[colname].values.reshape(-1)
             else:
@@ -245,7 +245,7 @@ def retrieve_and_concat_stnlists(directory: str, option: str) -> pd.DataFrame:
             if any("lon" in str for str in temp.columns):
                 colname = [col for col in temp.columns if "lon" in col]
                 if len(colname) > 1:  # If more than one col returned
-                    removelist = set([])
+                    removelist = set()
                     colname = list(set(colname) - removelist)
                 df["longitude"] = temp[colname].values.reshape(-1)
             else:
@@ -255,13 +255,14 @@ def retrieve_and_concat_stnlists(directory: str, option: str) -> pd.DataFrame:
             if any("elev" in str for str in temp.columns):
                 colname = [col for col in temp.columns if "elev" in col]
                 if len(colname) > 1:  # If more than one col returned
-                    removelist = set(
-                        ["elev(m)", "barometer_elev", "anemometer_elev"]
-                    )  # remove sensor heights
+                    removelist = {
+                        "elev(m)",
+                        "barometer_elev",
+                        "anemometer_elev",
+                    }  # remove sensor heights
                     colname = list(set(colname) - removelist)
-                    if len(colname) > 1:
-                        if "elev_dem" in colname:
-                            colname.remove("elev_dem")
+                    if len(colname) > 1 and "elev_dem" in colname:
+                        colname.remove("elev_dem")
                 df["elevation"] = temp[colname].values.reshape(-1)
             else:
                 df["elevation"] = np.nan
@@ -274,9 +275,10 @@ def retrieve_and_concat_stnlists(directory: str, option: str) -> pd.DataFrame:
                     if any(sub in col for sub in ["begin", "start", "connect"])
                 ]
                 if len(colname) > 1:  # If more than one col returned
-                    removelist = set(
-                        ["startdate", "begindate"]
-                    )  # Add any items to be manually removed here.
+                    removelist = {
+                        "startdate",
+                        "begindate",
+                    }  # Add any items to be manually removed here.
                     colname = list(set(colname) - removelist)
                     if len(colname) > 1:
                         # If both start_time (parsed) and begin (not parsed) columns present, remove begin.
@@ -297,9 +299,9 @@ def retrieve_and_concat_stnlists(directory: str, option: str) -> pd.DataFrame:
                     if any(sub in col for sub in ["end", "disconnect"])
                 ]
                 if len(colname) > 1:  # If more than one col returned
-                    removelist = set(
-                        ["enddate"]
-                    )  # Add any items to be manually removed here.
+                    removelist = {
+                        "enddate"
+                    }  # Add any items to be manually removed here.
                     colname = list(set(colname) - removelist)
                     if len(colname) > 1:
                         # If both start_time (parsed) and begin (not parsed) columns present, remove begin.
@@ -379,16 +381,16 @@ def retrieve_and_concat_stnlists(directory: str, option: str) -> pd.DataFrame:
 
     # # Remove any duplicates (of network and ID)
     if option == "pull":
-        dffull.drop_duplicates(
-            subset=["name", "latitude", "longitude", "network"], inplace=True
+        dffull = dffull.drop_duplicates(
+            subset=["name", "latitude", "longitude", "network"]
         )
     else:
-        dffull.drop_duplicates(
-            subset=["era-id", "latitude", "longitude", "network"], inplace=True
+        dffull = dffull.drop_duplicates(
+            subset=["era-id", "latitude", "longitude", "network"]
         )
 
     # Resort by network
-    dffull.sort_values(by=["network"], inplace=True)
+    dffull = dffull.sort_values(by=["network"])
 
     # Reset index
     dffull = dffull.reset_index(drop=True)

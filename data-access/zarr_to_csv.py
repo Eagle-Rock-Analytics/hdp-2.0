@@ -37,9 +37,10 @@ On success, a CSV file named `{STATION}.csv` will be saved to `EXPORT_DIR`,
 including metadata (if enabled) and tabular data.
 """
 
+from typing import List  # used for function type hints
+
 import xarray as xr
 from zarr.errors import GroupNotFoundError
-from typing import List  # used for function type hints
 
 # Network and station name
 NETWORK = "MARITIME"
@@ -83,7 +84,7 @@ def _get_metadata_from_ds(ds: xr.Dataset, network: str, station: str) -> List[st
         "disclaimer": "n/a",
     }
 
-    for attr in attrs_dict.keys():
+    for attr in attrs_dict:
         try:  # Get attribute from dataset
             attrs_dict[attr] = ds.attrs[attr]
         except KeyError:

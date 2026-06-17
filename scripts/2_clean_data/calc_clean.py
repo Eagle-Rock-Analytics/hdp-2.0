@@ -31,7 +31,7 @@ _calc_ps_alt: Calculates station air pressure from altimeter setting and station
 
 Intended Use
 ------------
-Functions consist of unit conversions, coordinate conversions, and derived variable calculations for cleaning. 
+Functions consist of unit conversions, coordinate conversions, and derived variable calculations for cleaning.
 """
 
 import geopandas as gpd

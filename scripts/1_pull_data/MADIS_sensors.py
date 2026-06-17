@@ -6,7 +6,7 @@ This script outputs a sensor list csv for each of the MADIS networks and is save
 Functions
 ---------
 - madis_network_name_to_id: Get dictionary of network names and short IDs.
-- get_madis_sensor_metadata: Retrieves sensor metadata for each network. 
+- get_madis_sensor_metadata: Retrieves sensor metadata for each network.
 
 Intended Use
 ------------
@@ -18,13 +18,13 @@ Notes
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
-import requests
-import pandas as pd
-import boto3
 from io import StringIO
-import numpy as np
-import config  # Import API keys.
 
+import boto3
+import config  # Import API keys.
+import numpy as np
+import pandas as pd
+import requests
 from calc_pull import get_wecc_poly
 from MADIS_pull import get_network_metadata
 
@@ -125,7 +125,7 @@ def get_madis_sensor_metadata(
         bbox_api = bbox.loc[0, :].tolist()  # [lonmin,latmin,lonmax,latmax]
         bbox_api = ",".join([str(elem) for elem in bbox_api])
 
-        for index, row in networks.iterrows():
+        for _index, row in networks.iterrows():
             networkname = row["SHORTNAME"]
             networkid = row["ID"]
 
@@ -134,7 +134,6 @@ def get_madis_sensor_metadata(
             url = f"https://api.synopticdata.com/v2/stations/metadata?token={token}&network={networkid}&bbox={bbox_api}&complete=1&sensorvars=1&recent=20&output=json"
             request = requests.get(url).json()
 
-            ids = []
             station_list = pd.DataFrame(request["STATION"])
             station_list = pd.concat(
                 [station_list, station_list["PERIOD_OF_RECORD"].apply(pd.Series)],
@@ -193,14 +192,14 @@ def get_madis_sensor_metadata(
                 station_list = station_list.join(df)
 
             # Standardize NAs
-            station_list.replace("None", np.nan, inplace=True)
+            station_list = station_list.replace("None", np.nan)
             station_list = station_list.fillna(value=np.nan)
 
             # Standardize column names
-            station_list.rename(
-                columns=lambda s: s.replace("PERIOD_OF_RECORD.", ""), inplace=True
+            station_list = station_list.rename(
+                columns=lambda s: s.replace("PERIOD_OF_RECORD.", "")
             )
-            station_list.rename(columns=lambda s: s.replace(".", "_"), inplace=True)
+            station_list = station_list.rename(columns=lambda s: s.replace(".", "_"))
 
             # Save station list to AWS
             savedir = directory + networkname + "/"

@@ -10,14 +10,13 @@ Functions
 
 Intended Use
 ------------
-Script functions assess QA/QC on buoy stations with known issues, as a part of the QA/QC pipeline. 
+Script functions assess QA/QC on buoy stations with known issues, as a part of the QA/QC pipeline.
 """
 
-import numpy as np
-import datetime
-from log_config import logger
 import inspect
 
+import numpy as np
+from log_config import logger
 from qaqc_utils import *
 
 

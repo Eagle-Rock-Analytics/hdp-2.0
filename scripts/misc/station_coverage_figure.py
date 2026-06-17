@@ -20,18 +20,15 @@ Functions
 import inspect
 import os
 import sys
-from time import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import contextily as ctx
 import geopandas as gpd
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 from matplotlib.lines import Line2D
-
 from paths import BUCKET_NAME, MERGE_WX
-
 
 NETWORK_COLORS_PATH = "../../data/network_colors.txt"
 STATIONLIST_URI = f"s3://{BUCKET_NAME}/{MERGE_WX}/all_network_stationlist_merge.csv"

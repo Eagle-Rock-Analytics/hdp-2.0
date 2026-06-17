@@ -93,7 +93,7 @@ SCAN/SNOTEL,E,Edited/ data record was manually edited by data editor
 NDBC/MARITIME,T,Transmission parity error (Applies to continuous winds and non-WPM wave data and DART data)
 NDBC/MARITIME,M,Missing sensor data (A result of a garbled or missing message)
 NDBC/MARITIME,W,A WPM wave message is short/ missing a checksum/ or parity errors are detected
-NDBC/MARITIME,D,Delete measurement from release and archive 
+NDBC/MARITIME,D,Delete measurement from release and archive
 NDBC/MARITIME,S,Invalid statistical parameter
 NDBC/MARITIME,V,Failed time continuity
 NDBC/MARITIME,L,Failed range limits

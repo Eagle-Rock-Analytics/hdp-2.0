@@ -47,7 +47,7 @@ conda install mamba -c conda-forge -y
 ```
 
 ## 🛠️ 5. Install the required packages in the environment
-Mamba will install all the packages in the `environment.yml` file (which includes python) into the `hist-obs` environment. 
+Mamba will install all the packages in the `environment.yml` file (which includes python) into the `hist-obs` environment.
 
 ```bash
 mamba env update --file environment.yml --prune -y

@@ -13,7 +13,7 @@ Functions
 - get_cimis_update_ftp: Query ftp server for CIMIS data and download csv files. Use to update data.
 
 Intended Use
------------- 
+------------
 Retrieves raw data for an individual network, all variables, all times. Organized by station, with 1 file per year.
 
 Notes
@@ -25,14 +25,13 @@ This is a separate function/branch.
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
+from datetime import date, datetime, timezone
 from ftplib import FTP
-from datetime import datetime, timezone, date
-import pandas as pd
+from io import StringIO
+
 import boto3
-from io import BytesIO, StringIO
-
+import pandas as pd
 from calc_pull import ftp_to_aws
-
 
 s3 = boto3.client("s3")
 BUCKET_NAME = "wecc-historical-wx"

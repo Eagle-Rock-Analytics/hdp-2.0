@@ -13,14 +13,15 @@ Functions
 
 Intended Use
 ------------
-Script function utilities, as a part of the data pulling process. 
+Script function utilities, as a part of the data pulling process.
 """
 
+from ftplib import FTP
+from io import BytesIO
+
+import boto3
 import geopandas as gpd
 from shapely.geometry import box
-import boto3
-from io import BytesIO, StringIO
-from ftplib import FTP
 
 s3 = boto3.client("s3")
 BUCKET_NAME = "wecc-historical-wx"

@@ -27,6 +27,7 @@ Examples:
 """
 
 import argparse
+
 import boto3
 
 BUCKET = "wecc-historical-wx"

@@ -22,14 +22,14 @@ Notes
 Because errors.csv are parsed, very old errors.csv may want to be removed manually from AWS or thresholded below.
 """
 
-import boto3
-import pandas as pd
-from io import BytesIO, StringIO
-import numpy as np
-import xarray as xr
-import s3fs
 from datetime import datetime
-import re
+from io import BytesIO, StringIO
+
+import boto3
+import numpy as np
+import pandas as pd
+import s3fs
+import xarray as xr
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")
@@ -288,7 +288,7 @@ def clean_qa(network: str, clean_var_add: bool = False, cwop_letter: str | None 
     else:
         # Add relevant ID to errors csv
         errors["ID"] = np.nan
-        errors.reset_index(inplace=True, drop=True)
+        errors = errors.reset_index(drop=True)
         errors["Time"] = pd.to_datetime(errors["Time"], format="%Y%m%d%H%M", utc=True)
 
         for index, row in errors.iterrows():
@@ -299,7 +299,7 @@ def clean_qa(network: str, clean_var_add: bool = False, cwop_letter: str | None 
 
         for index, row in stations.iterrows():
             # For each station
-            error_sta = errors.loc[errors.ID == row["ERA-ID"]]
+            error_sta = errors.loc[row["ERA-ID"] == errors.ID]
             if error_sta.empty:
                 # if no errors for station
                 continue
@@ -357,7 +357,7 @@ def clean_qa(network: str, clean_var_add: bool = False, cwop_letter: str | None 
             )
 
     # clean_var_add, with subsetting for CWOP
-    if clean_var_add == True:
+    if clean_var_add:
         print(
             "Processing all cleaned files to assess variable coverage -- this may take awhile based on size of network!"
         )
@@ -368,7 +368,7 @@ def clean_qa(network: str, clean_var_add: bool = False, cwop_letter: str | None 
         # Set end time to be current time at beginning of download: for error handling csv.
         end_api = datetime.now().strftime("%Y%m%d%H%M")
         # For attributes of netCDF file
-        timestamp = datetime.utcnow().strftime("%m-%d-%Y, %H:%M:%S")
+        datetime.utcnow().strftime("%m-%d-%Y, %H:%M:%S")
 
         # add in default columns of "N" to cleaned station list for all core and associated variables
         # also adds column that counts number of valid/non-nan observations
@@ -410,13 +410,13 @@ def clean_qa(network: str, clean_var_add: bool = False, cwop_letter: str | None 
         # get list of all station filenames successfully cleaned, and filter by subsetting (CWOP)
         if network != "CWOP":
             files = list(filter(lambda f: f.endswith(".nc"), files))
-        elif network == "CWOP" and cwop_letter == None:
+        elif network == "CWOP" and cwop_letter is None:
             # in case all CWOP is run at once
             print(
                 "Warning: Setting cwop_letter = None is for an entire network update for CWOP, estimated 3+ days to complete."
             )
             files = list(filter(lambda f: f.endswith(".nc"), files))
-        elif network == "CWOP" and cwop_letter != None:
+        elif network == "CWOP" and cwop_letter is not None:
             # subsetting in place for CWOP
             # Procedure for grouping of data in CWOP to split up 7k+ stations by first letter
             not_ABCDEFG = (
@@ -476,7 +476,7 @@ def clean_qa(network: str, clean_var_add: bool = False, cwop_letter: str | None 
                     fs = s3fs.S3FileSystem()
                     aws_url = f"s3://wecc-historical-wx/{file}"
 
-                    if network == "CWOP" and cwop_letter != None:
+                    if network == "CWOP" and cwop_letter is not None:
                         # produces stationlist update of only stations within that cwop_letter so it doesnt overwrite
                         # uses subsetted station ids list
                         stations = stations.loc[
@@ -532,7 +532,7 @@ def clean_qa(network: str, clean_var_add: bool = False, cwop_letter: str | None 
     content = new_buffer.getvalue()
 
     # set different files for CWOP if subsetting
-    if clean_var_add == False:
+    if not clean_var_add:
         s3_cl.put_object(
             Bucket=BUCKET_NAME,
             Body=content,
@@ -541,7 +541,7 @@ def clean_qa(network: str, clean_var_add: bool = False, cwop_letter: str | None 
 
     else:
         # clean_var_add == True
-        if network == "CWOP" and cwop_letter != None:
+        if network == "CWOP" and cwop_letter is not None:
             s3_cl.put_object(
                 Bucket=BUCKET_NAME,
                 Body=content,

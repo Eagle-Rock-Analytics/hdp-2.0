@@ -20,7 +20,6 @@ import numpy as np
 import pandas as pd
 import scipy.stats as stats
 from log_config import logger
-
 from qaqc_plot import *
 from qaqc_utils import *
 
@@ -58,8 +57,8 @@ def qaqc_unusual_large_jumps(
     logger.info("Running: qaqc_unusual_large_jumps")
     INDEX = df.index
     df = df.copy()
-    df.set_index(df["time"], inplace=True)
-    df.drop(columns=["time"], inplace=True)
+    df = df.set_index(df["time"])
+    df = df.drop(columns=["time"])
 
     # Define test variables and check if they are in the dataframe
     check_vars = [
@@ -88,7 +87,7 @@ def qaqc_unusual_large_jumps(
             new_df = grab_valid_obs(df, var)  # subset for valid obs
 
             # first scans suspect values using entire record
-            if new_df[var].isna().all() == True:
+            if new_df[var].isna().all():
                 continue  # bypass to next variable if all obs are nans
 
             # Detect spikes
@@ -163,7 +162,7 @@ def potential_spike_check(
     spikes = pd.Series(
         np.zeros_like(potential_spike).astype("bool"), index=potential_spike.index
     )
-    dates = pd.Series(potential_spike.index.values)
+    pd.Series(potential_spike.index.values)
 
     for i in ind:
         try:

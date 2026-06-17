@@ -12,26 +12,26 @@ Functions
 - get_cw3e_update: Pull updated CW3E data via FTP
 
 Intended Use
------------- 
+------------
 Retrieves raw data for an individual network, all variables, all times. Organized by station, with 1 file per station per year.
 
 Notes
 -----
-1. Subsequent updates may want to just pull the most recent files in the 2022 subfolder by station, 
-which are numbered by day and saved as .20m, .21m, .22m, .23m (in bytes). The data is typically at a native resolution of 3minutes, 
+1. Subsequent updates may want to just pull the most recent files in the 2022 subfolder by station,
+which are numbered by day and saved as .20m, .21m, .22m, .23m (in bytes). The data is typically at a native resolution of 3minutes,
 resulting in very large raw files.
 2. This function assumes users have configured the AWS CLI such that their access key / secret key pair are stored in ~/.aws/credentials.
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
-from ftplib import FTP
 from datetime import datetime
-import pandas as pd
-import boto3
+from ftplib import FTP
 from io import StringIO
-import requests
-import config  # Synoptic API keys (obsolete)
 
+import boto3
+import config  # Synoptic API keys (obsolete)
+import pandas as pd
+import requests
 from calc_pull import ftp_to_aws, get_wecc_poly
 
 s3 = boto3.client("s3")

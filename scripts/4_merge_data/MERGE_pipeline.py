@@ -22,29 +22,28 @@ Example
 Run from command line or as part of a larger batch process for all stations.
 """
 
-from datetime import datetime, timedelta, timezone
+import inspect
+import logging
 import os
 import sys
 import time
-import inspect
+from datetime import datetime, timedelta, timezone
 from typing import Dict
 
 import pandas as pd
-import xarray as xr
 import s3fs
-import logging
+import xarray as xr
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME, STATIONS_CSV_PATH, QAQC_WX, MERGE_WX
-
-from merge_log_config import setup_logger, upload_log_to_s3
-from merge_hourly_standardization import merge_hourly_standardization
-from merge_derive_missing import merge_derive_missing_vars
 from merge_clean_vars import filter_columns
+from merge_derive_missing import merge_derive_missing_vars
 from merge_eraqc_counts import (
-    eraqc_counts_native_timestep,
     eraqc_counts_hourly_timestep,
+    eraqc_counts_native_timestep,
 )
+from merge_hourly_standardization import merge_hourly_standardization
+from merge_log_config import setup_logger, upload_log_to_s3
+from paths import BUCKET_NAME, MERGE_WX, QAQC_WX, STATIONS_CSV_PATH
 
 
 def read_station_metadata(s3_path: str, logger: logging.Logger) -> pd.DataFrame:
@@ -249,7 +248,7 @@ def convert_xr_to_df(ds: xr.Dataset, logger: logging.Logger) -> pd.DataFrame:
 
     try:
         df = ds.to_dataframe()
-        df.reset_index(inplace=True)  # Flatten to remove MultiIndex
+        df = df.reset_index()  # Flatten to remove MultiIndex
     except Exception as e:
         logger.error(
             f"{inspect.currentframe().f_code.co_name}: Failed to convert xarray Dataset to DataFrame."
@@ -326,7 +325,7 @@ def convert_df_to_xr(
     logger.info(f"{inspect.currentframe().f_code.co_name}: Starting...")
 
     try:
-        df.set_index(["station", "time"], inplace=True)
+        df = df.set_index(["station", "time"])
     except Exception as e:
         logger.error(
             f"{inspect.currentframe().f_code.co_name}: Failed to set DataFrame MultiIndex with station and time. This is required for conversion from pd.DataFrame --> xr.Dataset object with correct coordinates."
@@ -554,7 +553,7 @@ def run_merge_one_station(
 
     except Exception as e:
         logger.info(f"Error traceback: {type(e).__name__}: {e}")
-        logger.info(f"Terminating merge script.")
+        logger.info("Terminating merge script.")
 
     finally:  # Even in case of failure, upload logfile to s3
 

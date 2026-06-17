@@ -1,15 +1,15 @@
 """
 public_facing_stationlist_cleanup.py
 
-Prepares a cleaned station list for public distribution by correcting elevation 
+Prepares a cleaned station list for public distribution by correcting elevation
 errors and creating standardized source IDs for merged weather station data.
 
 Operations:
 - Filters to successfully merged stations
 - Corrects bad/missing ASOSAWOS elevation values using source data
 - Creates source-id field (uses WBAN codes for ASOSAWOS, era-id suffix for others)
-- Uses existing latitude and longitude columns to create a geometry column 
-- Reads in Tiger US states shapefile and adds US state for each station 
+- Uses existing latitude and longitude columns to create a geometry column
+- Reads in Tiger US states shapefile and adds US state for each station
 - Exports subset of columns as CSV for public-facing applications
 - Uploads output CSV to S3 merge bucket
 """
@@ -17,12 +17,12 @@ Operations:
 import os
 import sys
 
-import pandas as pd
-import numpy as np
 import geopandas as gpd
+import numpy as np
+import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME, RAW_WX, MERGE_WX
+from paths import BUCKET_NAME, MERGE_WX, RAW_WX
 
 # s3 Paths
 MERGE_LIST_PATH = f"s3://{BUCKET_NAME}/{MERGE_WX}/all_network_stationlist_merge.csv"
@@ -46,7 +46,7 @@ def main():
     asosawos_df["era-id"] = "ASOSAWOS_" + asosawos_df["ISD-ID"].str.replace("-", "")
 
     # Rename elevation column to match merge_df
-    asosawos_df.rename(columns={"ELEV(M)": "elevation"}, inplace=True)
+    asosawos_df = asosawos_df.rename(columns={"ELEV(M)": "elevation"})
 
     # Check for ASOSAWOS bad or missing elevation in merge dataframe
     bad_elevation = [-30479.6952]
@@ -81,7 +81,7 @@ def main():
         merge_df["ICAO"],
         merge_df["source-id"].astype(str),
     )
-    merge_df.drop(columns=["ICAO"], inplace=True)
+    merge_df = merge_df.drop(columns=["ICAO"])
 
     # Add in geometry column so it can be used as a GeoDataFrame
     merge_df = gpd.GeoDataFrame(
@@ -95,13 +95,13 @@ def main():
         "https://www2.census.gov/geo/tiger/GENZ2018/shp/cb_2018_us_state_20m.zip"
     )
     states.to_crs(merge_df.crs, inplace=True)
-    states.rename(columns={"STUSPS": "state"}, inplace=True)
+    states = states.rename(columns={"STUSPS": "state"})
 
     # Spatial join to find which state each station is in
     merge_df = gpd.sjoin(
         merge_df, states[["state", "geometry"]], how="left", predicate="within"
     )
-    merge_df.drop(columns="index_right", inplace=True)
+    merge_df = merge_df.drop(columns="index_right")
 
     # Convert geometry to WKT format
     # WKT (Well-Known Text) is a text format for representing vector geometries

@@ -23,11 +23,9 @@ Script functions for the distributional gap QA/QC test, as a part of the QA/QC p
 
 import numpy as np
 import pandas as pd
-import scipy.stats as stats
 from log_config import logger
-
-from qaqc_utils import *
 from qaqc_plot import *
+from qaqc_utils import *
 
 
 def qaqc_unusual_gaps(
@@ -191,19 +189,18 @@ def qaqc_dist_gap_part1(
                 )
                 df.loc[bad, var + "_eraqc"] = 21  # see era_qaqc_flag_meanings.csv
 
-                if plot:
-                    if (
-                        21 in df[var + "_eraqc"].values
-                    ):  # don't plot a figure if nothing is flagged
-                        dist_gap_part1_plot(
-                            df,
-                            month,
-                            var,
-                            flagval=21,
-                            iqr_thresh=iqr_thresh,
-                            network=network,
-                        )
-        except Exception as e:
+                if plot and (
+                    21 in df[var + "_eraqc"].values
+                ):  # don't plot a figure if nothing is flagged
+                    dist_gap_part1_plot(
+                        df,
+                        month,
+                        var,
+                        flagval=21,
+                        iqr_thresh=iqr_thresh,
+                        network=network,
+                    )
+        except Exception:
             logger.info(
                 f"qaqc_dist_gap_part1 failed on {var} -- bypassing to next variable"
             )
@@ -260,7 +257,7 @@ def qaqc_dist_gap_part2(
                 df_valid = grab_valid_obs(
                     monthly_df, var, kind="drop"
                 )  # drops data flagged with 20
-                if len(df_valid) == 0 or df_valid[var].isnull().all() == True:
+                if len(df_valid) == 0 or df_valid[var].isnull().all():
                     logger.info(
                         f"No valid data present for {var} in month {month} -- skipping to next month"
                     )
@@ -325,16 +322,15 @@ def qaqc_dist_gap_part2(
                                 22  # see era_qaqc_flag_meanings.csv
                             )
 
-                if plot:
-                    if (
-                        22 in df[var + "_eraqc"].values
-                    ):  # don't plot a figure if nothing is flagged
-                        dist_gap_part2_plot(
-                            df,
-                            month,
-                            var,
-                            network=df["station"].unique()[0].split("_")[0],
-                        )
+                if plot and (
+                    22 in df[var + "_eraqc"].values
+                ):  # don't plot a figure if nothing is flagged
+                    dist_gap_part2_plot(
+                        df,
+                        month,
+                        var,
+                        network=df["station"].unique()[0].split("_")[0],
+                    )
         except:
             logger.info(
                 f"qaqc_dist_gap_part2 failed on {var} -- bypassing to next variable"
@@ -545,7 +541,7 @@ def qaqc_unusual_gaps_precip(
     )
 
     # filter the boolean series with itself and set True entries to flag value "33"
-    flagged = output.loc[output == True]
+    flagged = output.loc[output]
     flagged_str = flagged.map({True: "33"})
 
     # backflag all observations in the input dataframe

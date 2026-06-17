@@ -29,19 +29,19 @@ https://www.ncei.noaa.gov/data/global-hourly/doc/isd-format-document.pdf
 """
 
 import os
-import xarray as xr
-from datetime import datetime, date
 import re
+import traceback
+import warnings
+from collections import Counter
+from datetime import datetime
+from io import BytesIO, StringIO
+
+import boto3
+import botocore
 import numpy as np
 import pandas as pd
 import requests
-from collections import Counter
-import boto3
-from io import BytesIO, StringIO
 import smart_open
-import traceback
-import botocore
-import warnings
 
 # Optional: Silence pandas' future warnings about regex (not relevant here)
 warnings.filterwarnings(action="ignore", category=FutureWarning)
@@ -52,18 +52,15 @@ except:
     print("Missing config.py file with API token. Make file if necessary.")
     exit()
 
-from clean_utils import get_file_paths
 import calc_clean
+from clean_utils import get_file_paths
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
 BUCKET_NAME = "wecc-historical-wx"
 
 # Set up directory to save files temporarily, if it doesn't already exist.
-try:
-    os.mkdir("temp")
-except:
-    pass
+os.makedirs("temp", exist_ok=True)
 
 
 def get_qaqc_flags(token: str, qaqcdir: str, network: str) -> pd.DataFrame:
@@ -204,10 +201,10 @@ def parse_madis_headers(file: str) -> dict[str, str]:
     # First, some error handling.
 
     # Check for duplicated columns. If duplicated names, manually rename as 1 and 2, and then check for duplicates after reading in.
-    if set([x for x in columns if columns.count(x) > 1]):
+    if {x for x in columns if columns.count(x) > 1}:
         dup = True
         # Add dup flag.
-        dup_col = set([x for x in columns if columns.count(x) > 1])
+        dup_col = {x for x in columns if columns.count(x) > 1}
         # Manually rename second iteration of column.
         d = {
             a: list(range(1, b + 1)) if b > 1 else ""
@@ -303,9 +300,7 @@ def parse_madis_to_pandas(
             ]
         )
         != 0
-    ):
-        df = df.drop(df.tail(1).index)
-    elif len(df[df.isin(['{"status": 408']).any(axis=1)]) != 0:
+    ) or len(df[df.isin(['{"status": 408']).any(axis=1)]) != 0:
         df = df.drop(df.tail(1).index)
 
     # Drop any columns that only contain NAs.
@@ -317,7 +312,7 @@ def parse_madis_to_pandas(
             # For each duplicated column
             cols = df.filter(like=i).columns
             if df[cols[0]].equals(df[cols[1]]):
-                df.drop(cols[1], axis=1, inplace=True)
+                df = df.drop(cols[1], axis=1)
 
             else:
                 print("Non-identical duplicate columns found.")
@@ -387,7 +382,7 @@ def parse_madis_to_pandas(
     df = df.drop(columns=[col for col in df if col not in coltokeep])
 
     # Manually convert "None" to np.nan
-    df.replace(to_replace="None", value=np.nan, inplace=True)
+    df = df.replace(to_replace="None", value=np.nan)
 
     return df
 
@@ -441,7 +436,7 @@ def clean_madis(
         removedvars = []
 
         # # Get list of station IDs from filename and clean.
-        ids = list()
+        ids = []
         for file in files:
             id = file.split("/")[-1]  # Remove leading folders
             id = re.sub(".csv", "", id)  # Remove file extension
@@ -482,7 +477,7 @@ def clean_madis(
             "F",
             "G",
         )
-        if network == "CWOP" and cwop_letter != None:
+        if network == "CWOP" and cwop_letter is not None:
             # cwop_letter = "other"
             if "other" in cwop_letter and len(cwop_letter) == 5:
                 ids = [id for id in ids if not id.startswith(not_ABCDEFG)]
@@ -511,7 +506,7 @@ def clean_madis(
                 f"CWOP batch cleaning for '{cwop_letter}' stations: batch-size of {len(ids)} stations"
             )
 
-        elif network == "CWOP" and cwop_letter == None:
+        elif network == "CWOP" and cwop_letter is None:
             # This a full network clean with no batch sub-setting, ex: cwop_letter = None
             print(
                 "Warning: Setting cwop_letter = None is for an entire network clean of CWOP, estimated 1 week of continuous runtime to complete."
@@ -541,7 +536,6 @@ def clean_madis(
 
                 for file in stat_files:
                     try:
-                        skip = 0
                         header = parse_madis_headers(file)
                         # If units are NaN, this signifies an empty dataframe. Write to errors, but do not clean station.
                         if isinstance(header["units"], float) and np.isnan(
@@ -559,7 +553,7 @@ def clean_madis(
                             continue
                         headers.append(header)
 
-                    except Exception as e:
+                    except Exception:
                         print(
                             f"Error parsing MADIS headers, please check for {station_id}."
                         )
@@ -619,7 +613,7 @@ def clean_madis(
                     errors["Error"].append("Dataframe appending issue, please check")
                     continue  # skip station
 
-                elif all(df is None for df in dfs) == True:
+                elif all(df is None for df in dfs):
                     # If all files for a station do not have data within time bound range
                     errors["File"].append(stat_files)
                     errors["Time"].append(end_api)
@@ -633,7 +627,13 @@ def clean_madis(
 
                 # Deal with units
                 units = pd.DataFrame(
-                    list(zip(headers["columns"], list(headers["units"].split(",")))),
+                    list(
+                        zip(
+                            headers["columns"],
+                            list(headers["units"].split(",")),
+                            strict=False,
+                        )
+                    ),
                     columns=["column", "units"],
                 )
                 varstokeep = list(df_stat.columns)
@@ -649,7 +649,7 @@ def clean_madis(
                 # Fix multi-type columns
                 # If column has QC in it, force to string.
                 for b in df_stat.columns:
-                    multitype = set(type(x).__name__ for x in df_stat[b])
+                    multitype = {type(x).__name__ for x in df_stat[b]}
                     if len(multitype) > 1:
                         if "qc" in b:
                             # Coerce to string (to handle multiple QA/QC flags)
@@ -658,13 +658,12 @@ def clean_madis(
                             df_stat[b] = df_stat[b].str.replace(".0", "")
                         elif "wind_cardinal_direction" in b:
                             df_stat[b] = df_stat[b].astype(str)  # Coerce to string
-                        elif "sea_level_pressure_set" in b:
-                            df_stat[b] = df_stat[b].astype(float)  # Coerce to float.
-                        elif "wind_gust_set_1" in b:
-                            df_stat[b] = df_stat[b].astype(float)  # Coerce to float.
-                        elif "heat_index_set_1" in b:
-                            df_stat[b] = df_stat[b].astype(float)  # Coerce to float.
-                        elif "wind_direction_set_1" in b:
+                        elif (
+                            "sea_level_pressure_set" in b
+                            or "wind_gust_set_1" in b
+                            or "heat_index_set_1" in b
+                            or "wind_direction_set_1" in b
+                        ):
                             df_stat[b] = df_stat[b].astype(float)  # Coerce to float.
                         else:
                             # Code to flag novel exceptions, correct and add explicit handling above.
@@ -790,7 +789,7 @@ def clean_madis(
 
                 # Update sensor metadata
                 # May be multiple rows if sensors added/removed over time.
-                station_sensors = sensor_data.loc[sensor_data.STID == i]
+                station_sensors = sensor_data.loc[i == sensor_data.STID]
                 # Get all position columns, dropping duplicate rows
                 sensorheights = station_sensors[
                     [x for x in station_sensors.columns if "position" in x]
@@ -849,7 +848,7 @@ def clean_madis(
                             row["names"] = np.nan  # Add names column
 
                             # generate attribute names
-                            for index, row in dates.iterrows():
+                            for _index, row in dates.iterrows():
                                 row["names"] = (
                                     f"anemometer_height_m_{row.wind_speed_1_start[0:10]}_{row.wind_speed_1_end[0:10]}"
                                 )
@@ -912,7 +911,7 @@ def clean_madis(
                             row["names"] = np.nan  # Add names column
 
                             # generate attribute names
-                            for index, row in dates.iterrows():
+                            for _index, row in dates.iterrows():
                                 row["names"] = (
                                     f"thermometer_height_m_{row.air_temp_1_start[0:10]}_{row.air_temp_1_end[0:10]}"
                                 )
@@ -975,7 +974,7 @@ def clean_madis(
 
                             if pd.notnull(ds["elevation"].values[0]):
                                 # generate attribute names
-                                for index, row in dates.iterrows():
+                                for _index, row in dates.iterrows():
                                     row["names"] = (
                                         f"barometer_elevation_m_{row.pressure_1_start[0:10]}_{row.pressure_1_end[0:10]}"
                                     )
@@ -983,7 +982,7 @@ def clean_madis(
                                         row["pressure_1_position"]
                                     ) + float(ds["elevation"].values[0])
                             else:
-                                for index, row in dates.iterrows():
+                                for _index, row in dates.iterrows():
                                     row["names"] = (
                                         f"barometer_height_m_{row.pressure_1_start[0:10]}_{row.pressure_1_end[0:10]}"
                                     )
@@ -1074,14 +1073,14 @@ def clean_madis(
                 # Update variable attributes and do unit conversions
 
                 # tas: air surface temperature (K)
-                if "air_temp_set_1" in ds.keys():
+                if "air_temp_set_1" in ds:
                     ds["tas"] = calc_clean._unit_degC_to_K(ds["air_temp_set_1"])
                     ds = ds.drop("air_temp_set_1")
 
-                    if "air_temp_set_1_qc" in ds.keys():
+                    if "air_temp_set_1_qc" in ds:
                         # Flag values are listed in this column and separated with ; when more than one is used for a given observation.
                         flagvals = ds["air_temp_set_1_qc"].values.tolist()[0]
-                        flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                        flagvals = [x for x in flagvals if not pd.isnull(x)]
                         flagvals = list(np.unique(flagvals))  # Get unique values
                         # Split any rows with multiple flags and run unique again.
                         flagvals = list(
@@ -1133,7 +1132,7 @@ def clean_madis(
                 # Note here that if "pressure_set_1" has values this is a direct station observation reading.
                 # Otherwise, if "pressure_set_1d" has values this is a derived value calculated from altimeter and elevation.
                 # We will manually recalculate this here.
-                if "pressure_set_1" in ds.keys():
+                if "pressure_set_1" in ds:
                     # If station pressure directly observed
                     if not np.isnan(ds["pressure_set_1"].values).all():
                         # If station pressure directly observed
@@ -1144,22 +1143,22 @@ def clean_madis(
                         ds["ps"].attrs["standard_name"] = "air_pressure"
                         ds["ps"].attrs["units"] = "Pa"
 
-                        if "sea_level_pressure_set_1" in ds.keys():
+                        if "sea_level_pressure_set_1" in ds:
                             ds = ds.drop("sea_level_pressure_set_1")
                             # Drop psl if station pressure available
 
-                if "ps" not in ds.keys():
+                if "ps" not in ds:
                     # If this didn't work, look for sea level pressure
-                    if "sea_level_pressure_set_1" in ds.keys():
+                    if "sea_level_pressure_set_1" in ds:
                         ds = ds.rename({"sea_level_pressure_set_1": "psl"})
                         ds["psl"].attrs["long_name"] = "sea_level_air_pressure"
                         ds["psl"].attrs["standard_name"] = "air_pressure"
                         ds["psl"].attrs["units"] = "Pa"
 
-                if "pressure_set_1_qc" in ds.keys():
+                if "pressure_set_1_qc" in ds:
                     # If QA/QC exists.
                     flagvals = ds["pressure_set_1_qc"].values.tolist()[0]
-                    flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                    flagvals = [x for x in flagvals if not pd.isnull(x)]
                     flagvals = list(np.unique(flagvals))  # Get unique values
                     flagvals = list(
                         np.unique(
@@ -1184,14 +1183,14 @@ def clean_madis(
                         ds["ps_qc"].attrs[
                             "flag_meanings"
                         ] = "See QA/QC csv for network."
-                        if "ps" in ds.keys():
+                        if "ps" in ds:
                             ds["ps"].attrs["ancillary_variables"] = "ps_qc"
 
-                if "sea_level_pressure_set_1_qc" in ds.keys():
+                if "sea_level_pressure_set_1_qc" in ds:
                     # If QA/QC exists.
-                    if "psl" in ds.keys():
+                    if "psl" in ds:
                         flagvals = ds["sea_level_pressure_set_1_qc"].values.tolist()[0]
-                        flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                        flagvals = [x for x in flagvals if not pd.isnull(x)]
                         flagvals = list(np.unique(flagvals))  # Get unique values
                         flagvals = list(
                             np.unique(
@@ -1223,7 +1222,7 @@ def clean_madis(
 
                 # tdps: dew point temperature (K)
                 # if raw dew point temperature observed, use that.
-                if "dew_point_temperature_set_1" in ds.keys():
+                if "dew_point_temperature_set_1" in ds:
                     ds["tdps"] = calc_clean._unit_degC_to_K(
                         ds["dew_point_temperature_set_1"]
                     )
@@ -1236,12 +1235,12 @@ def clean_madis(
                     ds["tdps"].attrs["comment"] = "Converted from Celsius to Kelvin."
 
                     # QAQC flag
-                    if "dew_point_temperature_set_1_qc" in ds.keys():
+                    if "dew_point_temperature_set_1_qc" in ds:
                         # Flag values are listed in this column and separated with ; when more than one is used for a given observation.
                         flagvals = ds["dew_point_temperature_set_1_qc"].values.tolist()[
                             0
                         ]
-                        flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                        flagvals = [x for x in flagvals if not pd.isnull(x)]
                         flagvals = list(np.unique(flagvals))  # Get unique values
                         flagvals = list(
                             np.unique(
@@ -1282,7 +1281,7 @@ def clean_madis(
                 # At this stage, no infilling. So we will keep all columns with data and simply rename them.
 
                 # Reformat remaining columns
-                if "precip_accum_24_hour_set_1" in ds.keys():
+                if "precip_accum_24_hour_set_1" in ds:
                     ds = ds.rename({"precip_accum_24_hour_set_1": "pr_24h"})
                     ds["pr_24h"].attrs["long_name"] = "24_hr_precipitation_amount"
                     ds["pr_24h"].attrs["units"] = "mm/24hr"
@@ -1290,10 +1289,10 @@ def clean_madis(
                         "comment"
                     ] = "Precipitation accumulated in previous 24 hour period."
 
-                    if "precip_accum_24_hour_set_1_qc" in ds.keys():
+                    if "precip_accum_24_hour_set_1_qc" in ds:
                         ds = ds.rename({"precip_accum_24_hour_set_1_qc": "pr_24h_qc"})
 
-                if "precip_accum_since_local_midnight_set_1" in ds.keys():
+                if "precip_accum_since_local_midnight_set_1" in ds:
                     ds = ds.rename(
                         {"precip_accum_since_local_midnight_set_1": "pr_localmid"}
                     )
@@ -1306,14 +1305,14 @@ def clean_madis(
                         "comment"
                     ] = "Precipitation accumulated since local midnight."
 
-                    if "precip_accum_since_local_midnight_set_1_qc" in ds.keys():
+                    if "precip_accum_since_local_midnight_set_1_qc" in ds:
                         ds = ds.rename(
                             {
                                 "precip_accum_since_local_midnight_set_1_qc": "pr_localmid_qc"
                             }
                         )
 
-                if "precip_accum_set_1" in ds.keys():
+                if "precip_accum_set_1" in ds:
                     ds = ds.rename({"precip_accum_set_1": "pr"})
                     ds["pr"].attrs["long_name"] = "precipitation_amount"
                     ds["pr"].attrs["units"] = "mm/interval"
@@ -1321,10 +1320,10 @@ def clean_madis(
                         "comment"
                     ] = "Precipitation accumulated since previous measurement."
 
-                    if "precip_accum_set_1_qc" in ds.keys():
+                    if "precip_accum_set_1_qc" in ds:
                         ds = ds.rename({"precip_accum_set_1_qc": "pr_qc"})
 
-                if "precip_accum_one_hour_set_1" in ds.keys():
+                if "precip_accum_one_hour_set_1" in ds:
                     ds = ds.rename({"precip_accum_one_hour_set_1": "pr_1h"})
                     ds["pr_1h"].attrs["long_name"] = "hourly_precipitation_amount"
                     ds["pr_1h"].attrs["units"] = "mm/hr"
@@ -1332,10 +1331,10 @@ def clean_madis(
                         "comment"
                     ] = "Precipitation accumulated in previous hour."
 
-                    if "precip_accum_one_hour_set_1_qc" in ds.keys():
+                    if "precip_accum_one_hour_set_1_qc" in ds:
                         ds = ds.rename({"precip_accum_one_hour_set_1_qc": "pr_1h_qc"})
 
-                if "precip_accum_five_minute_set_1" in ds.keys():
+                if "precip_accum_five_minute_set_1" in ds:
                     ds = ds.rename({"precip_accum_five_minute_set_1": "pr_5min"})
                     ds["pr_5min"].attrs["long_name"] = "5_minute_precipitation_amount"
                     ds["pr_5min"].attrs["units"] = "mm/5 min"
@@ -1343,15 +1342,15 @@ def clean_madis(
                         "comment"
                     ] = "Precipitation accumulated in previous 5 minutes."
 
-                    if "precip_accum_five_minute_set_1_qc" in ds.keys():
+                    if "precip_accum_five_minute_set_1_qc" in ds:
                         ds = ds.rename(
                             {"precip_accum_five_minute_set_1_qc": "pr_5min_qc"}
                         )
 
                 # Reformat qc columns
-                if "pr_24h_qc" in ds.keys():
+                if "pr_24h_qc" in ds:
                     flagvals = ds["pr_24h_qc"].values.tolist()[0]
-                    flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                    flagvals = [x for x in flagvals if not pd.isnull(x)]
                     flagvals = list(np.unique(flagvals))  # Get unique values
                     flagvals = list(
                         np.unique(
@@ -1378,9 +1377,9 @@ def clean_madis(
                         # List other variables associated with variable (QA/QC)
                         ds["pr_24h"].attrs["ancillary_variables"] = "pr_24h_qc"
 
-                if "pr_localmid_qc" in ds.keys():
+                if "pr_localmid_qc" in ds:
                     flagvals = ds["pr_localmid_qc"].values.tolist()[0]
-                    flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                    flagvals = [x for x in flagvals if not pd.isnull(x)]
                     flagvals = list(np.unique(flagvals))  # Get unique values
                     flagvals = list(
                         np.unique(
@@ -1409,9 +1408,9 @@ def clean_madis(
                             "ancillary_variables"
                         ] = "pr_localmid_qc"
 
-                if "pr_qc" in ds.keys():
+                if "pr_qc" in ds:
                     flagvals = ds["pr_qc"].values.tolist()[0]
-                    flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                    flagvals = [x for x in flagvals if not pd.isnull(x)]
                     flagvals = list(np.unique(flagvals))  # Get unique values
                     flagvals = list(
                         np.unique(
@@ -1438,9 +1437,9 @@ def clean_madis(
                         # List other variables associated with variable (QA/QC)
                         ds["pr"].attrs["ancillary_variables"] = "pr_qc"
 
-                if "pr_1h_qc" in ds.keys():
+                if "pr_1h_qc" in ds:
                     flagvals = ds["pr_1h_qc"].values.tolist()[0]
-                    flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                    flagvals = [x for x in flagvals if not pd.isnull(x)]
                     flagvals = list(np.unique(flagvals))  # Get unique values
                     flagvals = list(
                         np.unique(
@@ -1467,9 +1466,9 @@ def clean_madis(
                         # List other variables associated with variable (QA/QC)
                         ds["pr_1h"].attrs["ancillary_variables"] = "pr_1h_qc"
 
-                if "pr_5min_qc" in ds.keys():
+                if "pr_5min_qc" in ds:
                     flagvals = ds["pr_5min_qc"].values.tolist()[0]
-                    flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                    flagvals = [x for x in flagvals if not pd.isnull(x)]
                     flagvals = list(np.unique(flagvals))  # Get unique values
                     flagvals = list(
                         np.unique(
@@ -1497,7 +1496,7 @@ def clean_madis(
                         ds["pr_5min"].attrs["ancillary_variables"] = "pr_5min_qc"
 
                 # Set ancillary variables based on other precip cols
-                precip_cols = [elem for elem in ds.keys() if "pr" in elem]
+                precip_cols = [elem for elem in ds if "pr" in elem]
                 precip_cols = [elem for elem in precip_cols if "pressure" not in elem]
 
                 if precip_cols:
@@ -1510,7 +1509,7 @@ def clean_madis(
                             ds[col].attrs["ancillary_variables"] = " ".join(relcols)
 
                 # hurs: relative humidity
-                if "relative_humidity_set_1" in ds.keys():
+                if "relative_humidity_set_1" in ds:
                     ds = ds.rename({"relative_humidity_set_1": "hurs"})
                     # Set attributes
                     ds["hurs"].attrs["long_name"] = "relative_humidity"
@@ -1518,9 +1517,9 @@ def clean_madis(
                     ds["hurs"].attrs["units"] = "percent"
 
                     # If QA/QC column exists
-                    if "relative_humidity_set_1_qc" in ds.keys():
+                    if "relative_humidity_set_1_qc" in ds:
                         flagvals = ds["relative_humidity_set_1_qc"].values.tolist()[0]
-                        flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                        flagvals = [x for x in flagvals if not pd.isnull(x)]
                         flagvals = list(np.unique(flagvals))  # Get unique values
                         flagvals = list(
                             np.unique(
@@ -1550,7 +1549,7 @@ def clean_madis(
 
                 # rsds: surface_downwelling_shortwave_flux_in_air (solar radiation, w/m2)
 
-                if "solar_radiation_set_1" in ds.keys():
+                if "solar_radiation_set_1" in ds:
                     # Already in w/m2, no need to convert units.
                     # If column exists, rename.
                     ds = ds.rename({"solar_radiation_set_1": "rsds"})
@@ -1563,9 +1562,9 @@ def clean_madis(
                     ds["rsds"].attrs["units"] = "W m-2"
 
                 # rsds: QA/QC flags
-                if "solar_radiation_set_1_qc" in ds.keys():
+                if "solar_radiation_set_1_qc" in ds:
                     flagvals = ds["solar_radiation_set_1_qc"].values.tolist()[0]
-                    flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                    flagvals = [x for x in flagvals if not pd.isnull(x)]
                     flagvals = list(np.unique(flagvals))  # Get unique values
                     flagvals = list(
                         np.unique(
@@ -1594,7 +1593,7 @@ def clean_madis(
                         ds["rsds"].attrs["ancillary_variables"] = "rsds_qc"
 
                 # sfcWind : wind speed (m/s)
-                if "wind_speed_set_1" in ds.keys():
+                if "wind_speed_set_1" in ds:
                     # Data already in m/s.
                     ds = ds.rename({"wind_speed_set_1": "sfcWind"})
                     ds["sfcWind"].attrs["long_name"] = "wind_speed"
@@ -1606,11 +1605,9 @@ def clean_madis(
                     # (Method of calculation may vary and is unknown source by source.)
                     # See: https://weather.gladstonefamily.net/CWOP_Guide.pdf
 
-                if "wind_speed_set_1_qc" in ds.keys():
+                if "wind_speed_set_1_qc" in ds:
                     flagvals = ds["wind_speed_set_1_qc"].values.tolist()[0]
-                    flagvals = [
-                        x for x in flagvals if pd.isnull(x) == False
-                    ]  # Remove nas
+                    flagvals = [x for x in flagvals if not pd.isnull(x)]  # Remove nas
                     flagvals = list(np.unique(flagvals))  # Get unique values
                     flagvals = list(
                         np.unique(
@@ -1640,7 +1637,7 @@ def clean_madis(
                         ds["sfcWind"].attrs["ancillary_variables"] = "sfcWind_qc"
 
                 # sfcWind_dir: wind direction
-                if "wind_direction_set_1" in ds.keys():
+                if "wind_direction_set_1" in ds:
                     # No conversions needed, do not make raw column.
                     ds = ds.rename({"wind_direction_set_1": "sfcWind_dir"})
                     ds["sfcWind_dir"].attrs["long_name"] = "wind_direction"
@@ -1650,9 +1647,9 @@ def clean_madis(
                         "comment"
                     ] = "Wind direction is defined by the direction that the wind is coming from (i.e., a northerly wind originates in the north and blows towards the south)."
 
-                if "wind_direction_set_1_qc" in ds.keys():
+                if "wind_direction_set_1_qc" in ds:
                     flagvals = ds["wind_direction_set_1_qc"].values.tolist()[0]
-                    flagvals = [x for x in flagvals if pd.isnull(x) == False]
+                    flagvals = [x for x in flagvals if not pd.isnull(x)]
                     flagvals = list(np.unique(flagvals))  # Get unique values
                     flagvals = list(
                         np.unique(
@@ -1684,21 +1681,21 @@ def clean_madis(
                         ] = "sfcWind_dir_qc"
 
                 # Other variables: rename to match format
-                if "altimeter_set_1" in ds.keys():
+                if "altimeter_set_1" in ds:
                     ds = ds.rename({"altimeter_set_1": "ps_altimeter"})
-                if "altimeter_set_1_qc" in ds.keys():
+                if "altimeter_set_1_qc" in ds:
                     ds = ds.rename({"altimeter_set_1_qc": "ps_altimeter_qc"})
-                if "dew_point_temperature_set_1d" in ds.keys():
+                if "dew_point_temperature_set_1d" in ds:
                     ds = ds.rename({"dew_point_temperature_set_1d": "tdps_derived"})
-                if "pressure_set_1d" in ds.keys():
+                if "pressure_set_1d" in ds:
                     ds = ds.rename({"pressure_set_1d": "ps_derived"})
 
-                if "ps_altimeter" in ds.keys():
+                if "ps_altimeter" in ds:
                     ds["ps_altimeter"].attrs["long_name"] = "altimeter"
                     ds["ps_altimeter"].attrs["units"] = "Pa"
                     ds["ps_altimeter"].attrs["ancillary_variables"] = "ps"
 
-                if "tdps_derived" in ds.keys():
+                if "tdps_derived" in ds:
                     ds["tdps_derived"] = calc_clean._unit_degC_to_K(ds["tdps_derived"])
                     ds["tdps_derived"].attrs[
                         "long_name"
@@ -1708,7 +1705,7 @@ def clean_madis(
                         "comment"
                     ] = "Derived by Synoptic. Converted from Celsius to Kelvin."
 
-                if "ps_derived" in ds.keys():
+                if "ps_derived" in ds:
                     ds["ps_derived"].attrs["long_name"] = "derived_station_pressure"
                     ds["ps_derived"].attrs["units"] = "Pa"
                     ds["ps_derived"].attrs["comment"] = "Derived by Synoptic."
@@ -1717,19 +1714,19 @@ def clean_madis(
                 ds = ds.drop("Station_ID")
 
                 # Quality control: if any variable is completely empty, drop it.
-                for key in ds.keys():
+                for key in ds:
                     try:
                         if np.isnan(ds[key].values).all():
                             if "elevation" not in key:
                                 # Don't drop elevation if NaN
                                 print(f"Dropping {key}")
                                 ds = ds.drop(key)
-                    except Exception as e:
+                    except Exception:
                         # Add to handle errors for unsupported data types
                         continue
 
                 # For QA/QC flags, replace np.nan with "nan" to avoid h5netcdf overwrite to blank.
-                for key in ds.keys():
+                for key in ds:
                     if "qc" in key:
                         # Coerce all values in key to string.
                         ds[key] = ds[key].astype(str)

@@ -17,7 +17,7 @@ library(tmap)
 library(aws.s3)
 
 # Read in master list of cleaned stations
-stns <- s3read_using(FUN = read.csv, 
+stns <- s3read_using(FUN = read.csv,
                      object = '2_clean_wx/temp_clean_master_station_list.csv',
                      bucket = 'wecc-historical-wx')
 
@@ -36,10 +36,10 @@ bioclim_stns <- extract(bioclim, stns_sf)
 # Join bioclim vars to stns df
 stns_allvars <- bind_cols(stns_sf, bioclim_stns)
 
-# Keep bio5,6,13,14 (max temp of warmest month, min temp of coldest month, 
+# Keep bio5,6,13,14 (max temp of warmest month, min temp of coldest month,
 # precip driest month, precip wettest month)
 stns_subset <- stns_allvars %>%
-  dplyr::select(era.id, elevation, network, 
+  dplyr::select(era.id, elevation, network,
                 wc2.1_30s_bio_5, wc2.1_30s_bio_6, wc2.1_30s_bio_13, wc2.1_30s_bio_14)
 
 # Read in windspeed raster
@@ -52,7 +52,7 @@ wind_latlon <- projectRaster(wind, crs = crs(bioclim))
 # Extract windspeed at stns
 wind_stns <- extract(wind_latlon, stns_sf)
 
-# append to stns df 
+# append to stns df
 stns_subset <- stns_subset %>%
   bind_cols(windspeed = wind_stns) %>%
   filter(elevation > -10000) #rm one erroneous value
@@ -67,30 +67,30 @@ transform_lhs <- function(lhs_index, variable_vector) {
   min_var <- min(variable_vector, na.rm = T)
   max_var <- max(variable_vector, na.rm = T)
   range_var <- max_var - min_var
-  
+
   conv <- min_var + lhs_index*range_var
-  
+
   return(conv)
 }
 
 # match lhs positions to stations for each variable
-elev <- pmap(list(lhs_samp), 
+elev <- pmap(list(lhs_samp),
      ~which.min(abs(stns_subset$elevation - transform_lhs(., stns_subset$elevation)))) %>%
   unlist()
 
-bio5 <- pmap(list(lhs_samp), 
+bio5 <- pmap(list(lhs_samp),
              ~which.min(abs(stns_subset$wc2.1_30s_bio_5 - transform_lhs(., stns_subset$wc2.1_30s_bio_5)))) %>%
   unlist()
 
-bio6 <- pmap(list(lhs_samp), 
+bio6 <- pmap(list(lhs_samp),
              ~which.min(abs(stns_subset$wc2.1_30s_bio_6 - transform_lhs(., stns_subset$wc2.1_30s_bio_6)))) %>%
   unlist()
 
-bio13 <- pmap(list(lhs_samp), 
+bio13 <- pmap(list(lhs_samp),
               ~which.min(abs(stns_subset$wc2.1_30s_bio_13 - transform_lhs(., stns_subset$wc2.1_30s_bio_13)))) %>%
   unlist()
 
-bio14 <- pmap(list(lhs_samp), 
+bio14 <- pmap(list(lhs_samp),
               ~which.min(abs(stns_subset$wc2.1_30s_bio_14 - transform_lhs(., stns_subset$wc2.1_30s_bio_14)))) %>%
   unlist()
 
@@ -107,27 +107,27 @@ stns_final <- stns_subset[stns_lhs, ]
 ## Create plots showing full distribution of key variables and testing subset distributions
 theme_set(theme_classic())
 
-elev <- ggplot(stns_subset, aes(x = elevation)) + 
+elev <- ggplot(stns_subset, aes(x = elevation)) +
   geom_density() + ylab('density') +
   geom_point(data = stns_final, aes(x = elevation, y = 0), col = 'skyblue', alpha = 0.5)
 
-bio5 <- ggplot(stns_subset, aes(x = wc2.1_30s_bio_5)) + 
+bio5 <- ggplot(stns_subset, aes(x = wc2.1_30s_bio_5)) +
   geom_density() + ylab('density') + xlab('maximum temp warmest month') +
   geom_point(data = stns_final, aes(x = wc2.1_30s_bio_5, y = 0), col = 'skyblue', alpha = 0.5)
 
-bio6 <- ggplot(stns_subset, aes(x = wc2.1_30s_bio_6)) + 
+bio6 <- ggplot(stns_subset, aes(x = wc2.1_30s_bio_6)) +
   geom_density() + ylab('density') + xlab('minimum temp coldest month') +
   geom_point(data = stns_final, aes(x = wc2.1_30s_bio_6, y = 0), col = 'skyblue', alpha = 0.5)
 
-bio13 <- ggplot(stns_subset, aes(x = wc2.1_30s_bio_13)) + 
+bio13 <- ggplot(stns_subset, aes(x = wc2.1_30s_bio_13)) +
   geom_density() + ylab('density') + xlab('precip wettest month') +
   geom_point(data = stns_final, aes(x = wc2.1_30s_bio_13, y = 0), col = 'skyblue', alpha = 0.5)
 
-bio14 <- ggplot(stns_subset, aes(x = wc2.1_30s_bio_14)) + 
+bio14 <- ggplot(stns_subset, aes(x = wc2.1_30s_bio_14)) +
   geom_density() + ylab('density') + xlab('precip driest month') +
   geom_point(data = stns_final, aes(x = wc2.1_30s_bio_14, y = 0), col = 'skyblue', alpha = 0.5)
 
-wind <- ggplot(stns_subset, aes(x = windspeed)) + 
+wind <- ggplot(stns_subset, aes(x = windspeed)) +
   geom_density() + ylab('density') + xlab('avg windspeed') +
   geom_point(data = stns_final, aes(x = wc2.1_30s_bio_14, y = 0), col = 'skyblue', alpha = 0.5)
 
@@ -145,4 +145,3 @@ stns_to_write <- stns_final %>%
   bind_cols(coords)
 
 write.csv(stns_to_write, "test_platform/scripts/3_qaqc_data/qaqc_training_station_list.csv", row.names = F)
-

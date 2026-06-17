@@ -3,7 +3,7 @@ MERGE_run_for_single_station.py
 
 Intended Use
 ------------
-This script is the main processing driver for the merge pipeline. 
+This script is the main processing driver for the merge pipeline.
 
 Inputs
 ------
@@ -20,6 +20,7 @@ python MERGE_run_for_single_station.py --station="ASOSAWOS_69007093217" --verbos
 """
 
 import argparse
+
 from MERGE_pipeline import run_merge_one_station
 
 
@@ -47,7 +48,7 @@ def main():
         prog="MERGE_run_for_single_station",  # Program name
         description="""This script runs the full merge pipeline for a single weather station dataset.
                         It processes cleaned QA/QC output and applies a sequence of standardization,
-                        homogenization, and export operations to generate a finalized station file. It is designed to be 
+                        homogenization, and export operations to generate a finalized station file. It is designed to be
                        network-independent, capable of processing data for individual stations across various networks.""",
     )
 

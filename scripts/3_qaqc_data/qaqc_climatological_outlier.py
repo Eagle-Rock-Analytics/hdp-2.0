@@ -1,7 +1,7 @@
 """
 qaqc_climatological_outlier.py
 
-This is a script where Stage 3: QA/QC function(s) on climatological outlier values in the data observations are flagged. 
+This is a script where Stage 3: QA/QC function(s) on climatological outlier values in the data observations are flagged.
 For use within the PIR-19-006 Historical Obsevations Platform.
 
 Functions
@@ -15,16 +15,15 @@ Functions
 
 Intended Use
 ------------
-Script functions assess QA/QC on climatological outliers from a Guassian distribution, as a part of the QA/QC pipeline. 
+Script functions assess QA/QC on climatological outliers from a Guassian distribution, as a part of the QA/QC pipeline.
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import scipy.stats as stats
 import scipy.signal as signal
+import scipy.stats as stats
 from log_config import logger
-
 from qaqc_plot import *
 from qaqc_unusual_gaps import *
 from qaqc_utils import *
@@ -33,7 +32,7 @@ from qaqc_utils import *
 def qaqc_climatological_outlier(
     df: pd.DataFrame,
     winsorize: bool = True,
-    winz_limits: list[float] = [0.05, 0.05],
+    winz_limits: list[float] = None,
     bin_size: float = 0.25,
     plot: bool = True,
 ) -> pd.DataFrame | None:
@@ -71,6 +70,8 @@ def qaqc_climatological_outlier(
     1. Fix plotting.
     """
 
+    if winz_limits is None:
+        winz_limits = [0.05, 0.05]
     new_df = df.copy()
 
     vars_to_check = ["tas", "tdps", "tdps_derived"]
@@ -437,7 +438,7 @@ def gap_search(freq: list, left: int, right: int) -> int:
     # Yellow flag, all values beyond the threshold are flagged
     left_flag = np.zeros_like(left_freq)
 
-    for i, f in zip(range(len(left_freq) - 1, -1, -1), left_freq[::-1]):
+    for i, f in zip(range(len(left_freq) - 1, -1, -1), left_freq[::-1], strict=False):
         if f < 0.1:
             # Red flag, values and gap below 0.1 and beyond the threshold are flagged
             left_flag[0 : i + 1] = -1
@@ -447,7 +448,7 @@ def gap_search(freq: list, left: int, right: int) -> int:
     # Yellow flag, all values beyond the threshold are flagged
     right_flag = np.zeros_like(right_freq)
 
-    for i, f in zip(range(len(right_freq)), right_freq):
+    for i, f in zip(range(len(right_freq)), right_freq, strict=False):
         if f < 0.1:
             # Red flag, values and gap below 0.1 and beyond the threshold are flagged
             right_flag[i:] = -1

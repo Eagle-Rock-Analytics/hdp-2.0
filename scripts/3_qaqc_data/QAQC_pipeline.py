@@ -22,35 +22,33 @@ Outputs
 QA/QC-processed data for an individual network, priority variables, all times. Organized by station as .zarr.
 """
 
+import datetime
 import os
 import sys
-import datetime
-import pandas as pd
-import numpy as np
-import xarray as xr
-import boto3
-import s3fs
-from io import StringIO
 import time
-import tempfile
-import logging
+
+import boto3
+import numpy as np
+import pandas as pd
+import s3fs
+import xarray as xr
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME, RAW_WX, CLEAN_WX, QAQC_WX, MERGE_WX, STATIONS_CSV_PATH
+from paths import BUCKET_NAME, CLEAN_WX, MERGE_WX, QAQC_WX, RAW_WX, STATIONS_CSV_PATH
 
 try:
     from log_config import setup_logger
-    from qaqc_plot import *
-    from qaqc_utils import *
-    from qaqc_wholestation import *
-    from qaqc_logic_checks import *
     from qaqc_buoy_check import *
+    from qaqc_climatological_outlier import *
+    from qaqc_deaccumulate import *
     from qaqc_frequent import *
+    from qaqc_logic_checks import *
+    from qaqc_plot import *
     from qaqc_unusual_gaps import *
     from qaqc_unusual_large_jumps import *
-    from qaqc_climatological_outlier import *
     from qaqc_unusual_streaks import *
-    from qaqc_deaccumulate import *
+    from qaqc_utils import *
+    from qaqc_wholestation import *
 except Exception as e:
     print(f"Error importing qaqc script: {e}")
 
@@ -149,9 +147,9 @@ def file_on_s3(df: pd.DataFrame, zarr: bool) -> pd.Series:
 
     # Depending on file type, modify the filepaths differently
     # The goal is to check if the era-id is contained in each substring
-    if zarr == False:  # Get netcdf files
+    if not zarr:  # Get netcdf files
         file_st = [f.split(".nc")[0].split("/")[-1] for f in files if f.endswith(".nc")]
-    elif zarr == True:  # Get zarrs
+    elif zarr:  # Get zarrs
         # We just want to get the top directory for each station, i.e. "VALLEYWATER_6001.zarr/"
         # Since each station has a bunch of individual zarr stores, the split() function returns many copies of the same string
         # We just want one filename per station
@@ -191,13 +189,13 @@ def read_network_files(network: str, zarr: bool) -> pd.DataFrame:
     full_df["mergedir"] = full_df["network"].apply(lambda row: f"{MERGE_WX}/{row}/")
 
     # If its a zarr store, use the zarr file extension (".zarr")
-    if zarr == True:
+    if zarr:
         full_df["key"] = full_df.apply(
             lambda row: row["cleandir"] + row["era-id"] + ".zarr", axis=1
         )
 
     # If its a netcdf, use the netcdf file extension (".nc")
-    elif zarr == False:
+    elif not zarr:
         full_df["key"] = full_df.apply(
             lambda row: row["cleandir"] + row["era-id"] + ".nc", axis=1
         )
@@ -230,7 +228,7 @@ def read_network_files(network: str, zarr: bool) -> pd.DataFrame:
     # Sort DataFrame by size to improve grouping efficiency
     df_sorted = df.sort_values(by="file_size", ascending=False)
 
-    for index, row in df_sorted.iterrows():
+    for _index, row in df_sorted.iterrows():
         if current_group_size + row["file_size"] > target_size and current_group:
             groups.append(pd.DataFrame(current_group))
             current_group = []
@@ -331,9 +329,9 @@ def process_output_ds(
     )
 
     # Write station file
-    if zarr == False:
+    if not zarr:
         filename = station + ".nc"  # Make file name
-    elif zarr == True:
+    elif zarr:
         filename = station + ".zarr"
     filepath = qaqcdir + filename  # Writes file path
 
@@ -342,9 +340,9 @@ def process_output_ds(
     logger.info(
         f"Saving/pushing {filename} with dims {ds.dims} to {BUCKET_NAME}/{qaqcdir}"
     )
-    if zarr == False:  # Upload as netcdf
+    if not zarr:  # Upload as netcdf
         s3.Bucket(BUCKET_NAME).upload_file(filename, filepath)
-    elif zarr == True:
+    elif zarr:
         filepath_s3 = f"s3://{BUCKET_NAME}/{qaqcdir}{filename}"
 
         # Delete existing zarr store before writing
@@ -1026,10 +1024,7 @@ def run_qaqc_one_station(
 
     # Set zarr argument
     zarrified_networks = ["VALLEYWATER", "CW3E"]  # Networks with zarrified data
-    if network in zarrified_networks:
-        zarr = True
-    else:
-        zarr = False
+    zarr = network in zarrified_networks
 
     # Set up error handling
     t0 = time.time()

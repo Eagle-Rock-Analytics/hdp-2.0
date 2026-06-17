@@ -1,7 +1,7 @@
 """
 log_config.py
 
-This is a script setting up Stage 3: QA/QC runtime logging for error tracing and timing. 
+This is a script setting up Stage 3: QA/QC runtime logging for error tracing and timing.
 For use within the PIR-19-006 Historical Obsevations Platform.
 
 Functions
@@ -11,7 +11,7 @@ Functions
 
 Intended Use
 ------------
-Functions set-up traceability of QA/QC pipeline for error tracing. 
+Functions set-up traceability of QA/QC pipeline for error tracing.
 """
 
 import logging

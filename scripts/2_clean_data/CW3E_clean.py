@@ -14,7 +14,7 @@ Approach
 
 Functions
 ---------
-- clean_cw3e: Cleans CW3E data. 
+- clean_cw3e: Cleans CW3E data.
 
 Intended Use
 ------------
@@ -28,30 +28,28 @@ Data is available from 04/23/2021-11/18/2021. At this time this script does not 
 """
 
 import os
-from datetime import datetime
-import numpy as np
-import pandas as pd
-import boto3
-from io import BytesIO, StringIO
-import dask.dataframe as dd
 import traceback
 import warnings
+from datetime import datetime
+from io import BytesIO, StringIO
+
+import boto3
+import dask.dataframe as dd
+import numpy as np
+import pandas as pd
 
 # Optional: Silence pandas' future warnings about regex (not relevant here)
 warnings.filterwarnings(action="ignore", category=FutureWarning)
 
-from clean_utils import get_file_paths
 import calc_clean
+from clean_utils import get_file_paths
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
 BUCKET_NAME = "wecc-historical-wx"
 
 # Set up directory to save files temporarily, if it doesn't already exist.
-try:
-    os.mkdir("temp")
-except:
-    pass
+os.makedirs("temp", exist_ok=True)
 
 
 def clean_cw3e(rawdir: str, cleandir: str):
@@ -136,7 +134,8 @@ def clean_cw3e(rawdir: str, cleandir: str):
         "Soil Reflectometer Output Period (usec) 100cm",
     ]
 
-    date_parser = lambda x, y, z: datetime.strptime(f"{x}.{y}.{z}", "%Y.%j.%H%M")
+    def date_parser(x, y, z):
+        return datetime.strptime(f"{x}.{y}.{z}", "%Y.%j.%H%M")
 
     try:
         # Get files
@@ -153,7 +152,7 @@ def clean_cw3e(rawdir: str, cleandir: str):
         stations = [station.replace("C3", "") for station in stations]
 
         # Remove error, station files, only some stations have a data format file
-        format_files = [file for file in files if "_DataFormat.txt" in file]
+        [file for file in files if "_DataFormat.txt" in file]
         # all valid stations have a readme file
         readme_files = [file for file in files if "_README.txt" in file]
         files = [file for file in files if "README" not in file]
@@ -301,7 +300,7 @@ def clean_cw3e(rawdir: str, cleandir: str):
                                 df_stat = df_stat[
                                     df_stat.columns.intersection(cols_to_keep)
                                 ]
-                            except Exception as e:
+                            except Exception:
                                 print(
                                     f"Dropping unnecessary column error for {station} -- check."
                                 )
@@ -429,7 +428,7 @@ def clean_cw3e(rawdir: str, cleandir: str):
                             # Update variable attributes and do unit conversions
 
                             # tas: air surface temperature (K)
-                            if "Temperature (C)" in ds.keys():
+                            if "Temperature (C)" in ds:
                                 ds["tas"] = calc_clean._unit_degC_to_K(
                                     ds["Temperature (C)"]
                                 )
@@ -443,7 +442,7 @@ def clean_cw3e(rawdir: str, cleandir: str):
                                 ] = "Converted from Celsius to Kelvin."
 
                             # ps: surface air pressure (Pa)
-                            if "Pressure (mb)" in ds.keys():
+                            if "Pressure (mb)" in ds:
                                 # If barometric pressure available
                                 # Convert from inHg to PA
                                 ds["psl"] = calc_clean._unit_pres_hpa_to_pa(
@@ -461,7 +460,7 @@ def clean_cw3e(rawdir: str, cleandir: str):
                             # Not available in this dataset.
 
                             # pr: precipitation
-                            if "Precipitation (mm)" in ds.keys():
+                            if "Precipitation (mm)" in ds:
                                 ds = ds.rename({"Precipitation (mm)": "pr"})
                                 ds["pr"].attrs[
                                     "long_name"
@@ -470,7 +469,7 @@ def clean_cw3e(rawdir: str, cleandir: str):
                                 ds["pr"].attrs["comment"] = "Accumulated precipitation."
 
                             # hurs: relative humidity (%)
-                            if "Relative Humidity (%)" in ds.keys():
+                            if "Relative Humidity (%)" in ds:
                                 # Already in %, no need to convert units.
                                 ds = ds.rename({"Relative Humidity (%)": "hurs"})
                                 # Set attributes
@@ -479,7 +478,7 @@ def clean_cw3e(rawdir: str, cleandir: str):
                                 ds["hurs"].attrs["units"] = "percent"
 
                             # rsds: surface_downwelling_shortwave_flux_in_air (solar radiation, w/m2)
-                            if "Solar Radiation (W/m^2)" in ds.keys():
+                            if "Solar Radiation (W/m^2)" in ds:
                                 # Already in w/m2, no need to convert units.
                                 # If column exists, rename.
                                 ds = ds.rename({"Solar Radiation (W/m^2)": "rsds"})
@@ -492,7 +491,7 @@ def clean_cw3e(rawdir: str, cleandir: str):
                                 ds["rsds"].attrs["units"] = "W m-2"
 
                             # sfcWind : wind speed (m/s)
-                            if "Scalar Wind Speed (m/s)" in ds.keys():
+                            if "Scalar Wind Speed (m/s)" in ds:
                                 # Data originally in mph.
                                 ds = ds.rename({"Scalar Wind Speed (m/s)": "sfcWind"})
                                 ds["sfcWind"].attrs["long_name"] = "wind_speed"
@@ -500,7 +499,7 @@ def clean_cw3e(rawdir: str, cleandir: str):
                                 ds["sfcWind"].attrs["units"] = "m s-1"
 
                             # sfcWind_dir: wind direction
-                            if "Wind Direction (degrees)" in ds.keys():
+                            if "Wind Direction (degrees)" in ds:
                                 # No conversions needed, do not make raw column.
                                 ds = ds.rename(
                                     {"Wind Direction (degrees)": "sfcWind_dir"}
@@ -517,7 +516,7 @@ def clean_cw3e(rawdir: str, cleandir: str):
                                 ] = "Wind direction is defined by the direction that the wind is coming from (i.e., a northerly wind originates in the north and blows towards the south)."
 
                             # Quality control: if any variable is completely empty, drop it.
-                            for key in ds.keys():
+                            for key in ds:
                                 try:
                                     if np.isnan(ds[key].values).all():
                                         if "elevation" not in key:  # Exclude elevation

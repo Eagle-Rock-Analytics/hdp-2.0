@@ -14,11 +14,11 @@ Approach
 
 Functions
 ---------
-- clean_cimis: Cleans CIMIS data. 
+- clean_cimis: Cleans CIMIS data.
 
 Intended Use
 ------------
-Cleans data for an individual network, priority variables, all times. Organized by station as .nc file. 
+Cleans data for an individual network, priority variables, all times. Organized by station as .nc file.
 
 Notes
 ------
@@ -28,31 +28,27 @@ Source: https://cimis.water.ca.gov/Content/PDF/FormerFlags2.pdf (Pre 1995)
 """
 
 import os
-import xarray as xr
+import warnings
+import zipfile
 from datetime import datetime, timedelta
-import re
+from io import BytesIO, StringIO
+
+import boto3
 import numpy as np
 import pandas as pd
-import boto3
-from io import BytesIO, StringIO
-import zipfile
-import warnings
 
 # Optional: Silence pandas' future warnings about regex (not relevant here)
 warnings.filterwarnings(action="ignore", category=FutureWarning)
 
-from clean_utils import var_to_unique_list, get_file_paths
 import calc_clean
+from clean_utils import get_file_paths, var_to_unique_list
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
 BUCKET_NAME = "wecc-historical-wx"
 
 # Set up directory to save files temporarily, if it doesn't already exist.
-try:
-    os.mkdir("temp")
-except:
-    pass
+os.makedirs("temp", exist_ok=True)
 
 
 def clean_cimis(rawdir: str, cleandir: str):
@@ -416,7 +412,7 @@ def clean_cimis(rawdir: str, cleandir: str):
 
                 # Update variable attributes and do unit conversions
                 # tas: air surface temperature (K)
-                if "Air Temperature (°C)" in ds.keys():
+                if "Air Temperature (°C)" in ds:
                     ds["tas"] = calc_clean._unit_degC_to_K(ds["Air Temperature (°C)"])
                     ds = ds.drop("Air Temperature (°C)")
 
@@ -424,7 +420,7 @@ def clean_cimis(rawdir: str, cleandir: str):
                     ds["tas"].attrs["standard_name"] = "air_temperature"
                     ds["tas"].attrs["units"] = "degree_Kelvin"
 
-                    if "QC for Air Temperature" in ds.keys():
+                    if "QC for Air Temperature" in ds:
                         # Flag values are listed in this column and separated with ; when more than one is used for a given observation.
                         ds = ds.rename({"QC for Air Temperature": "tas_qc"})
                         ds["tas_qc"].attrs["flag_values"] = var_to_unique_list(
@@ -443,7 +439,7 @@ def clean_cimis(rawdir: str, cleandir: str):
 
                 # tdps: dew point temperature (K)
                 # This is calculated by CIMIS from vapor pressure and air temperature data, not a raw observation.
-                if "Dew Point (°C)" in ds.keys():
+                if "Dew Point (°C)" in ds:
                     ds["tdps_derived"] = calc_clean._unit_degC_to_K(
                         ds["Dew Point (°C)"]
                     )
@@ -454,7 +450,7 @@ def clean_cimis(rawdir: str, cleandir: str):
                     ds["tdps_derived"].attrs["standard_name"] = "dew_point_temperature"
                     ds["tdps_derived"].attrs["units"] = "degree_Kelvin"
 
-                    if "QC for Dew Point" in ds.keys():
+                    if "QC for Dew Point" in ds:
                         # If QA/QC exists.
                         ds = ds.rename({"QC for Dew Point": "tdps_derived_qc"})
                         ds["tdps_derived_qc"].attrs["flag_values"] = var_to_unique_list(
@@ -473,14 +469,14 @@ def clean_cimis(rawdir: str, cleandir: str):
                     ] = "Derived by CIMIS from vapor pressure and air temperature. Converted from Celsius to Kelvin."
 
                 # pr: precipitation
-                if "Precipitation (mm)" in ds.keys():
+                if "Precipitation (mm)" in ds:
                     ds = ds.rename({"Precipitation (mm)": "pr"})
                     ds["pr"].attrs["long_name"] = "precipitation_accumulation"
                     ds["pr"].attrs["units"] = "mm/hour"
 
                 # pr: precipitation
                 # bumping out of the precipitation loop -- one CIMIS station does not have pr, but does have QC flag
-                if "QC for Precipitation" in ds.keys():
+                if "QC for Precipitation" in ds:
                     # If QA/QC exists.
                     ds = ds.rename({"QC for Precipitation": "pr_qc"})
                     ds["pr_qc"].attrs["flag_values"] = var_to_unique_list(ds, "pr_qc")
@@ -488,14 +484,14 @@ def clean_cimis(rawdir: str, cleandir: str):
 
                     # including within QC loop -- one CIMIS station does not have pr, but does have QC flag
                     # only update this info if pr variable is also present
-                    if "pr" in ds.keys():
+                    if "pr" in ds:
                         # List other variables associated with variable (QA/QC)
                         ds["pr"].attrs["ancillary_variables"] = "pr_qc"
 
                         ds["pr"].attrs["comment"] = "Accumulated precipitation."
 
                 # hurs: relative humidity (%)
-                if "Relative Humidity (%)" in ds.keys():
+                if "Relative Humidity (%)" in ds:
                     # Already in %, no need to convert units.
                     ds = ds.rename({"Relative Humidity (%)": "hurs"})
                     # Set attributes
@@ -504,7 +500,7 @@ def clean_cimis(rawdir: str, cleandir: str):
                     ds["hurs"].attrs["units"] = "percent"
 
                     # If QA/QC column exists
-                    if "QC for Relative Humidity" in ds.keys():
+                    if "QC for Relative Humidity" in ds:
                         ds = ds.rename({"QC for Relative Humidity": "hurs_qc"})
                         ds["hurs_qc"].attrs["flag_values"] = var_to_unique_list(
                             ds, "hurs_qc"
@@ -516,7 +512,7 @@ def clean_cimis(rawdir: str, cleandir: str):
                         ds["hurs"].attrs["ancillary_variables"] = "hurs_qc"
 
                 # rsds: surface_downwelling_shortwave_flux_in_air (solar radiation, w/m2)
-                if "Solar Radiation (W/m²)" in ds.keys():
+                if "Solar Radiation (W/m²)" in ds:
                     # Already in w/m2, no need to convert units.
                     # If column exists, rename.
                     ds = ds.rename({"Solar Radiation (W/m²)": "rsds"})
@@ -529,7 +525,7 @@ def clean_cimis(rawdir: str, cleandir: str):
                     ds["rsds"].attrs["units"] = "W m-2"
 
                     # rsds: QA/QC flags
-                    if "QC for Solar Radiation" in ds.keys():
+                    if "QC for Solar Radiation" in ds:
                         ds = ds.rename({"QC for Solar Radiation": "rsds_qc"})
                         ds["rsds_qc"].attrs["flag_values"] = var_to_unique_list(
                             ds, "rsds_qc"
@@ -541,7 +537,7 @@ def clean_cimis(rawdir: str, cleandir: str):
                         ds["rsds"].attrs["ancillary_variables"] = "rsds_qc"
 
                 # sfcWind : wind speed (m/s)
-                if "Wind Speed (m/s)" in ds.keys():
+                if "Wind Speed (m/s)" in ds:
                     # Data originally in mph.
                     ds = ds.rename({"Wind Speed (m/s)": "sfcWind"})
                     ds["sfcWind"].attrs["long_name"] = "wind_speed"
@@ -549,7 +545,7 @@ def clean_cimis(rawdir: str, cleandir: str):
                     ds["sfcWind"].attrs["units"] = "m s-1"
 
                     # sfcWind: QA/QC flags
-                    if "QC for Wind Speed" in ds.keys():
+                    if "QC for Wind Speed" in ds:
                         ds = ds.rename({"QC for Wind Speed": "sfcWind_qc"})
                         ds["sfcWind_qc"].attrs["flag_values"] = var_to_unique_list(
                             ds, "sfcWind_qc"
@@ -561,14 +557,14 @@ def clean_cimis(rawdir: str, cleandir: str):
                         ds["sfcWind"].attrs["ancillary_variables"] = "sfcWind_qc"
 
                 # sfcWind_dir: wind direction
-                if "Wind Direction (0-360)" in ds.keys():
+                if "Wind Direction (0-360)" in ds:
                     # No conversions needed, do not make raw column.
                     ds = ds.rename({"Wind Direction (0-360)": "sfcWind_dir"})
                     ds["sfcWind_dir"].attrs["long_name"] = "wind_direction"
                     ds["sfcWind_dir"].attrs["standard_name"] = "wind_from_direction"
                     ds["sfcWind_dir"].attrs["units"] = "degrees_clockwise_from_north"
 
-                    if "QC for Wind Direction" in ds.keys():
+                    if "QC for Wind Direction" in ds:
                         ds = ds.rename({"QC for Wind Direction": "sfcWind_dir_qc"})
                         ds["sfcWind_dir_qc"].attrs["flag_values"] = var_to_unique_list(
                             ds, "sfcWind_dir_qc"
@@ -588,7 +584,7 @@ def clean_cimis(rawdir: str, cleandir: str):
 
                 # Partial vapor pressure (kPa -> Pa) ## No CMIP standard name for this var, just CF.
                 # This is calculated by CIMIS from relative humidity and air temperature data.
-                if "Vapor Pressure (kPa)" in ds.keys():
+                if "Vapor Pressure (kPa)" in ds:
                     ds["pvp_derived"] = calc_clean._unit_pres_kpa_to_pa(
                         ds["Vapor Pressure (kPa)"]
                     )
@@ -600,7 +596,7 @@ def clean_cimis(rawdir: str, cleandir: str):
                     ] = "water_vapor_partial_pressure_in_air"
                     ds["pvp_derived"].attrs["units"] = "Pa"
 
-                    if "QC for Vapor Pressure" in ds.keys():
+                    if "QC for Vapor Pressure" in ds:
                         ds = ds.rename({"QC for Vapor Pressure": "pvp_derived_qc"})
                         ds["pvp_derived_qc"].attrs["flag_values"] = var_to_unique_list(
                             ds, "pvp_derived_qc"
@@ -618,7 +614,7 @@ def clean_cimis(rawdir: str, cleandir: str):
                 # Quality control: if any variable is completely empty, drop it.
                 # drop any column that does not have any valid (non-nan) data
                 # need to keep elevation separate, as it does have "valid" nan value, only drop if all other variables are also nans
-                for key in ds.keys():
+                for key in ds:
                     try:
                         if key != "elevation":
                             if np.isnan(ds[key].values).all():
@@ -633,12 +629,12 @@ def clean_cimis(rawdir: str, cleandir: str):
                             ds = ds.drop(key)
                             continue
 
-                    except Exception as e:
+                    except Exception:
                         # Add to handle errors for unsupported data types
                         continue
 
                 # For QA/QC flags, replace np.nan with "nan" to avoid h5netcdf overwrite to blank.
-                for key in ds.keys():
+                for key in ds:
                     if "qc" in key:
                         ds[key] = ds[key].astype(str)
                         # Coerce all values in key to string.

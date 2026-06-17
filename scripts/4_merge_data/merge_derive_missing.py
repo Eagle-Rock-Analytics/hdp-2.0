@@ -1,9 +1,9 @@
 """
 merge_derive_missing.py
 
-This script performs merge protocols for deriving any missing variables for ingestion into the Historical Observations Platform, 
-and is independent of network. Missing variables are defined as variables that can be calculated for which there are the 
-required sensors to calculate a variable. Observed and calculated data are not mixed, i.e., the missing variable derivation 
+This script performs merge protocols for deriving any missing variables for ingestion into the Historical Observations Platform,
+and is independent of network. Missing variables are defined as variables that can be calculated for which there are the
+required sensors to calculate a variable. Observed and calculated data are not mixed, i.e., the missing variable derivation
 is not meant to in-fill potential valid missing observations.
 
 Variables that can be derived if observations are missing
@@ -32,10 +32,11 @@ Intended Use
 Script functions are used to derive any potentially missing variables, where appropriate, as a part of the merge pipeline.
 """
 
-import pandas as pd
-import numpy as np
-import logging
 import inspect
+import logging
+
+import numpy as np
+import pandas as pd
 
 
 def merge_derive_missing_vars(
@@ -74,7 +75,7 @@ def merge_derive_missing_vars(
         # var is missing
         # check if required inputs are available
         if "tdps" not in df.columns and "tdps_derived" not in df.columns:
-            if _input_var_check(df, var1="tas", var2="hurs") == True:
+            if _input_var_check(df, var1="tas", var2="hurs"):
                 logger.info("Calculating tdps_derived...")
                 df["tdps_derived"] = _calc_dewpointtemp(df["tas"], df["hurs"])
                 # synergistic flag check
@@ -97,7 +98,7 @@ def merge_derive_missing_vars(
                 logger.info(f"{item} is present in station, no derivation necessary.")
                 continue
 
-            if item == "hurs" and _input_var_check(df, var1="tas", var2="tdps") == True:
+            if item == "hurs" and _input_var_check(df, var1="tas", var2="tdps"):
                 logger.info(f"Calculating {item}_derived...")
                 df["hurs_derived"] = _calc_relhumid(df["tas"], df["tdps"])
                 # synergistic flag check
@@ -111,9 +112,8 @@ def merge_derive_missing_vars(
                 )
                 logger.info(f"Successfully calculated {item}_derived")
 
-            elif (
-                item == "hurs"
-                and _input_var_check(df, var1="tas", var2="tdps_derived") == True
+            elif item == "hurs" and _input_var_check(
+                df, var1="tas", var2="tdps_derived"
             ):
                 logger.info(f"Calculating {item}_derived ...")
                 df["hurs_derived"] = _calc_relhumid(df["tas"], df["tdps_derived"])
@@ -128,9 +128,7 @@ def merge_derive_missing_vars(
                 )
                 logger.info(f"Successfully calculated {item}_derived")
 
-            elif (
-                item == "tas" and _input_var_check(df, var1="hurs", var2="tdps") == True
-            ):
+            elif item == "tas" and _input_var_check(df, var1="hurs", var2="tdps"):
                 logger.info(f"Calculating {item}_derived...")
                 df["tas_derived"] = _calc_airtemp(df["hurs"], df["tdps"])
                 # synergistic flag check
@@ -144,9 +142,8 @@ def merge_derive_missing_vars(
                 )
                 logger.info(f"Successfully calculated {item}_derived")
 
-            elif (
-                item == "tas"
-                and _input_var_check(df, var1="hurs", var2="tdps_derived") == True
+            elif item == "tas" and _input_var_check(
+                df, var1="hurs", var2="tdps_derived"
             ):
                 logger.info(f"Calculating {item}_derived ....")
                 df["tas_derived"] = _calc_airtemp(df["hurs"], df["tdps_derived"])
@@ -193,10 +190,7 @@ def _input_var_check(df: pd.DataFrame, var1: str, var2: str) -> bool:
         True if all required input vars present; False if not
     """
 
-    if var1 in df.columns and var2 in df.columns:
-        return True
-    else:
-        return False
+    return bool(var1 in df.columns and var2 in df.columns)
 
 
 def derive_synergistic_flag(

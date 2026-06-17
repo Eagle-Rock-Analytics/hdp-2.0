@@ -13,7 +13,7 @@ Functions
 - get_asosawos_data_ftp: Gets up to date station list of ASOS AWOS stations in WECC. Pulls in ISD station and ASOSAWOS stations
 
 Intended Use
------------- 
+------------
 Retrieves raw data for an individual network, all variables, all times. Organized by station, with 1 file per year.
 
 Notes
@@ -25,19 +25,18 @@ This is a separate function/branch.
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
-from ftplib import FTP
 from datetime import datetime, timezone
-import pandas as pd
-from shapely.geometry import Point
-import pandas as pd
-import geopandas as gp
-from geopandas.tools import sjoin
-import boto3
+from ftplib import FTP
 from io import BytesIO, StringIO
-import requests
-import numpy as np
 
+import boto3
+import geopandas as gp
+import numpy as np
+import pandas as pd
+import requests
 from calc_pull import ftp_to_aws, get_wecc_poly
+from geopandas.tools import sjoin
+from shapely.geometry import Point
 
 s3 = boto3.client("s3")
 BUCKET_NAME = "wecc-historical-wx"
@@ -304,7 +303,9 @@ def get_wecc_stations(terrpath: str, marpath: str) -> pd.DataFrame:
 
     # Use spatial geometry to only keep points in wecc marine / terrestrial areas
     # Zip lat lon coords
-    geometry = [Point(xy) for xy in zip(weccstations["LON"], weccstations["LAT"])]
+    geometry = [
+        Point(xy) for xy in zip(weccstations["LON"], weccstations["LAT"], strict=False)
+    ]
     # Convert to geodataframe
     weccgeo = gp.GeoDataFrame(weccstations, crs="EPSG:4326", geometry=geometry)
 
@@ -375,8 +376,8 @@ def get_wecc_stations(terrpath: str, marpath: str) -> pd.DataFrame:
     weccstations = weccstations[m1]
     asosawos = asosawos[m2]
 
-    weccstations.reset_index(inplace=True, drop=True)
-    asosawos.reset_index(inplace=True, drop=True)
+    weccstations = weccstations.reset_index(drop=True)
+    asosawos = asosawos.reset_index(drop=True)
 
     # Write ASOS AWOS station list to CSV
     csv_buffer = StringIO()

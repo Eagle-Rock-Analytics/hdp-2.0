@@ -31,25 +31,24 @@ Removed variables are not saved as removedvars.csv, due to the large number of v
 See ISD format document for list of available variables. The QA/QC flag dictionary has been manually formatted and uploaded to the QAQC folder for ASOS/AWOS data.
 """
 
-import os
-import xarray as xr
-from datetime import datetime, date, timedelta
-import re
-import numpy as np
-import pandas as pd
-import boto3
-from io import BytesIO, StringIO
-from ftplib import FTP
-import gzip
 import csv
+import gzip
+import os
+import re
 import traceback
 import warnings
+from datetime import datetime
+from io import BytesIO, StringIO
+
+import boto3
+import numpy as np
+import pandas as pd
 
 # Optional: Silence pandas' future warnings about regex (not relevant here)
 warnings.filterwarnings(action="ignore", category=FutureWarning)
 
-from clean_utils import get_file_paths
 import calc_clean
+from clean_utils import get_file_paths
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
@@ -61,10 +60,7 @@ WECC_MAR = "s3://wecc-historical-wx/0_maps/WECC_Informational_MarineCoastal_Boun
 
 
 # Set up directory to save files, if it doesn't already exist.
-try:
-    os.mkdir("temp")
-except:
-    pass
+os.makedirs("temp", exist_ok=True)
 
 
 def clean_otherisd(rawdir: str, cleandir: str):
@@ -82,7 +78,6 @@ def clean_otherisd(rawdir: str, cleandir: str):
     -------
     None
     """
-    network = "OtherISD"
 
     # Set up error handling.
     errors = {"File": [], "Time": [], "Error": []}
@@ -269,7 +264,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
 
                                 # Figure out length of precip. string.
                                 precip_len = re.search(
-                                    "(?<=AA1|AA2|AA3|AA4)[\da-zA-Z]{8}", string
+                                    r"(?<=AA1|AA2|AA3|AA4)[\da-zA-Z]{8}", string
                                 )
                                 if precip_len is not None:
                                     # If precip data exists
@@ -288,7 +283,8 @@ def clean_otherisd(rawdir: str, cleandir: str):
                                     if float(precip[2:6]) == 9999:
                                         # If precip depth of first report is missing.
                                         precip = re.search(
-                                            "(?<=AA1|AA2|AA3|AA4)[\da-zA-Z]{16}", string
+                                            r"(?<=AA1|AA2|AA3|AA4)[\da-zA-Z]{16}",
+                                            string,
                                         )
                                         if precip is not None:
                                             precip = precip.group()
@@ -316,7 +312,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                                 # Relative humidity - shouldn't be in this dataset, but capture if it is.
                                 # Section starts with CH
                                 hurs_string = re.search(
-                                    "(?<=CH1|CH2)[\da-zA-Z]{15}", string
+                                    r"(?<=CH1|CH2)[\da-zA-Z]{15}", string
                                 )
 
                                 if hurs_string is not None:
@@ -344,7 +340,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                                 # Not keeping "direct beam irradiance", "diffuse irradiance" which are also provided in same string.
                                 # Section starts with CH
                                 rsds_string = re.search(
-                                    "(?<=GM1)[\da-zA-Z]{11}", string
+                                    r"(?<=GM1)[\da-zA-Z]{11}", string
                                 )
 
                                 if rsds_string is not None:
@@ -363,7 +359,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                                     rsds_flag = np.nan
 
                                 # Station pressure, Section starts with CH
-                                ps_string = re.search("(?<=MA1)[\da-zA-Z]{12}", string)
+                                ps_string = re.search(r"(?<=MA1)[\da-zA-Z]{12}", string)
 
                                 if ps_string is not None:
                                     # If pressure exists
@@ -496,7 +492,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                                     sfcWind_dir_qc,
                                 ]
 
-                                for i, j in zip(columns, variables):
+                                for i, j in zip(columns, variables, strict=False):
                                     data[i].append(j)
 
                                 # For testing: progress update. Print status update every 1k rows.
@@ -619,7 +615,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                     # Update variable attributes and do unit conversions
 
                     # tas: air surface temperature (K)
-                    if "tas" in ds.keys():
+                    if "tas" in ds:
                         ds["tas"] = calc_clean._unit_degC_to_K(ds["tas"])
 
                         ds["tas"].attrs["long_name"] = "air_temperature"
@@ -629,7 +625,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                         ds["tas"].attrs["ancillary_variables"] = "tas_qc"
                         ds["tas"].attrs["comment"] = "Converted from Celsius."
 
-                    if "tas_qc" in ds.keys():
+                    if "tas_qc" in ds:
                         ds["tas_qc"].attrs[
                             "flag_values"
                         ] = "0 1 2 3 4 5 6 7 9 A C I M P R U"
@@ -638,7 +634,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                         ] = "See QA/QC csv for network."
 
                     # ps: surface air pressure (Pa)
-                    if "ps" in ds.keys():
+                    if "ps" in ds:
                         ds["ps"] = calc_clean._unit_pres_hpa_to_pa(ds["ps"])
                         ds["ps"].attrs["long_name"] = "station_air_pressure"
                         ds["ps"].attrs["standard_name"] = "air_pressure"
@@ -650,16 +646,16 @@ def clean_otherisd(rawdir: str, cleandir: str):
                         ds["tas"].attrs["comment"] = "Converted from hPa to Pa."
 
                         # Delete sea level pressure if station pressure included.
-                        if "psl" in ds.keys():
+                        if "psl" in ds:
                             ds.drop(("psl", "psl_qc"))
 
-                        if "ps_qc" in ds.keys():
+                        if "ps_qc" in ds:
                             ds["ps_qc"].attrs["flag_values"] = "0 1 2 3 4 5 6 7 M 9"
                             ds["ps_qc"].attrs[
                                 "flag_meanings"
                             ] = "See QA/QC csv for network."
 
-                        if "ps_altimeter" in ds.keys():
+                        if "ps_altimeter" in ds:
                             ds["ps_altimeter"] = calc_clean._unit_pres_hpa_to_pa(
                                 ds["ps_altimeter"]
                             )
@@ -673,7 +669,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                                 "comment"
                             ] = "Converted from hPa to Pa. The pressure value to which an aircraft altimeter is set so that it will indicate the altitude relative to mean sea level of an aircraft on the ground at the location for which the value was determined."  # Description of variable meaning, as not CF-standard.
 
-                        if "ps_altimeter_qc" in ds.keys():
+                        if "ps_altimeter_qc" in ds:
                             ds["ps_altimeter_qc"].attrs[
                                 "flag_values"
                             ] = "0 1 2 3 4 5 6 7 M 9"
@@ -683,7 +679,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
 
                     # If station air pressure not reported, convert from sea level pressure.
                     # Inputs: sea level pressure (mb/hPa), elevation (m), and air temperature (K)
-                    elif "psl" in ds.keys():
+                    elif "psl" in ds:
                         ds["psl"] = calc_clean._unit_pres_hpa_to_pa(ds["psl"])
                         ds["psl"].attrs["long_name"] = "sea_level_air_pressure"
                         ds["psl"].attrs["standard_name"] = "air_pressure_at_sea_level"
@@ -694,7 +690,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
 
                     # tdps: dew point temperature (K)
                     # tdps always provided by ISD reports, so no need to calculate here.
-                    if "tdps" in ds.keys():  # If variable already exists, rename.
+                    if "tdps" in ds:  # If variable already exists, rename.
                         ds["tdps"] = calc_clean._unit_degC_to_K(ds["tdps"])
 
                         ds["tdps"].attrs["long_name"] = "dew_point_temperature"
@@ -704,7 +700,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                         ds["tdps"].attrs["ancillary_variables"] = "tdps_qc"
                         ds["tdps"].attrs["comment"] = "Converted from Celsius."
 
-                    if "tdps_qc" in ds.keys():
+                    if "tdps_qc" in ds:
                         ds["tdps_qc"].attrs[
                             "flag_values"
                         ] = "0 1 2 3 4 5 6 7 9 A C I M P R U"
@@ -713,7 +709,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                         ] = "See QA/QC csv for network."
 
                     # pr: precipitation (Flag for discussion about CF compliance and units)
-                    if "pr" in ds.keys():
+                    if "pr" in ds:
                         # Note leave final conversion here to next stage.
                         ds["pr"].attrs["long_name"] = "precipitation_accumuation"
                         ds["pr"].attrs["units"] = "mm/?"
@@ -732,7 +728,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                             "ancillary_variables"
                         ] = "pr pr_qc pr_depth_qc"
 
-                    if "pr_qc" in ds.keys():
+                    if "pr_qc" in ds:
                         ds["pr_qc"].attrs[
                             "flag_values"
                         ] = "0 1 2 3 4 5 6 7 9 A I M P R U"
@@ -747,7 +743,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                         ] = "See QA/QC csv for network."
 
                     # hurs: relative humidity
-                    if "hurs" in ds.keys():
+                    if "hurs" in ds:
                         ds["hurs"].attrs["long_name"] = "average_relative_humidity"
                         ds["hurs"].attrs["standard_name"] = "relative_humidity"
                         ds["hurs"].attrs["units"] = "percent"
@@ -774,7 +770,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                             "ancillary_variables"
                         ] = "hurs hurs_qc hurs_flag hurs_temp hurs_temp_qc hurs_temp_flag"
 
-                    if "hurs_qc" in ds.keys():
+                    if "hurs_qc" in ds:
                         ds["hurs_qc"].attrs["flag_values"] = "1 3 9"
                         ds["hurs_qc"].attrs[
                             "flag_meanings"
@@ -798,7 +794,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                         ] = "See QA/QC csv for network."
 
                     # rsds: surface_downwelling_shortwave_flux_in_air (solar radiation, w/m2)
-                    if "rsds" in ds.keys():
+                    if "rsds" in ds:
                         ds["rsds"].attrs["long_name"] = "solar_radiation"
                         ds["rsds"].attrs[
                             "standard_name"
@@ -822,7 +818,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                             "comment"
                         ] = "Time period over which solar radiation is integrated."
 
-                        if "rsds_qc" in ds.keys():
+                        if "rsds_qc" in ds:
                             ds["rsds_qc"].attrs["flag_values"] = "0 1 2 3 9"
                             ds["rsds_qc"].attrs[
                                 "flag_meanings"
@@ -836,7 +832,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                             ] = "See QA/QC csv for network."
 
                     # sfcWind : wind speed (m/s) (Method of calculation may vary, standardize during hourly merge or QA/QC process.)
-                    if "sfcWind" in ds.keys():
+                    if "sfcWind" in ds:
                         # No conversions needed, do not add raw column.
                         ds["sfcWind"].attrs["long_name"] = "wind_speed"
                         ds["sfcWind"].attrs["standard_name"] = "wind_speed"
@@ -849,7 +845,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                             "comment"
                         ] = "Method of wind speed calculation varies, see sfcWind_method."
 
-                    if "sfcWind_method" in ds.keys():
+                    if "sfcWind_method" in ds:
                         ds["sfcWind_method"].attrs[
                             "long_name"
                         ] = "wind_speed_calculation_method"
@@ -860,14 +856,14 @@ def clean_otherisd(rawdir: str, cleandir: str):
                             "flag_meanings"
                         ] = "abridged_beaufort beaufort calm 5-minute_average normal 60-minute_average squall 180-minute_average variable missing"
 
-                    if "sfcWind_qc" in ds.keys():
+                    if "sfcWind_qc" in ds:
                         ds["sfcWind_method"].attrs["flag_values"] = "0 1 2 3 4 5 6 7 9"
                         ds["sfcWind_method"].attrs[
                             "flag_meanings"
                         ] = "See QA/QC csv for network."
 
                     # sfcWind_dir: wind direction
-                    if "sfcWind_dir" in ds.keys():
+                    if "sfcWind_dir" in ds:
                         # No conversions needed, do not make raw column.
                         ds["sfcWind_dir"].attrs["long_name"] = "wind_direction"
                         ds["sfcWind_dir"].attrs["standard_name"] = "wind_from_direction"
@@ -879,7 +875,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                             "ancillary_variables"
                         ] = "sfcWind_dir_qc"
 
-                    if "sfcWind_dir_qc" in ds.keys():
+                    if "sfcWind_dir_qc" in ds:
                         ds["sfcWind_dir_qc"].attrs["flag_values"] = "0 1 2 3 4 5 6 7 9"
                         ds["sfcWind_dir_qc"].attrs[
                             "flag_meanings"
@@ -888,7 +884,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                     # Update attributes for any non-standard variables
 
                     # QAQC process
-                    if "qaqc_process" in ds.keys():
+                    if "qaqc_process" in ds:
                         ds["qaqc_process"].attrs["long_name"] = "qaqc_process_type"
                         ds["qaqc_process"].attrs["flag_values"] = "V01 V02 V03"
                         ds["qaqc_process"].attrs[
@@ -896,7 +892,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                         ] = "no_qaqc automated_qaqc subjected_to_qaqc"
 
                     # Data source
-                    if "data_source" in ds.keys():
+                    if "data_source" in ds:
                         ds["data_source"].attrs["long_name"] = "source_of_data"
                         ds["data_source"].attrs[
                             "flag_values"
@@ -906,14 +902,14 @@ def clean_otherisd(rawdir: str, cleandir: str):
                         ] = "See QA/QC csv for network."
 
                     # For QA/QC flags, replace np.nan with "nan" to avoid h5netcdf overwrite to blank.
-                    for key in ds.keys():
+                    for key in ds:
                         if "qc" in key:
                             # Coerce all values in key to string
                             ds[key] = ds[key].astype(str)
 
                     # drop any column that does not have any valid (non-nan data)
                     # need to keep elevation separate, as it does have "valid" nan value, only drop if all other variables are also nans
-                    for key in ds.keys():
+                    for key in ds:
                         try:
                             if key != "elevation":
                                 if np.isnan(ds[key].values).all():
@@ -928,7 +924,7 @@ def clean_otherisd(rawdir: str, cleandir: str):
                                 ds = ds.drop(key)
                                 continue
 
-                        except Exception as e:
+                        except Exception:
                             # Add to handle errors for unsupported data types
                             continue
 

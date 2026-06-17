@@ -30,13 +30,12 @@ Run "python qaqc_generate_flag_sum.py"
 import os
 import sys
 import time
+
 import boto3
-import numpy as np
 import pandas as pd
-import xarray as xr
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME, QAQC_WX, MERGE_WX
+from paths import BUCKET_NAME, MERGE_WX, QAQC_WX
 
 # Set AWS credentials
 s3 = boto3.resource("s3")

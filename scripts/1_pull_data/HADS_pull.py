@@ -15,7 +15,7 @@ Functions
 - get_hads_update: Query NCEI server for updated HADS data and download zipped files.
 
 Intended Use
------------- 
+------------
 Retrieves raw data for an individual network, all variables, all times. Organized by station, with 1 file per day per year.
 
 Notes
@@ -24,21 +24,18 @@ Notes
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
-import requests
-import pandas as pd
-from datetime import datetime, timezone
 import re
-import boto3
+from datetime import datetime, timezone
 from io import StringIO
+
+import boto3
 import geopandas as gp
-from shapely.geometry import Point
-from geopandas.tools import sjoin
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import config  # Synoptic API keys (obsolete)
-
 from calc_pull import get_wecc_poly
-
+from geopandas.tools import sjoin
+from shapely.geometry import Point
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
@@ -104,7 +101,10 @@ def get_hads_stations(terrpath: str, marpath: str, directory: str) -> pd.DataFra
     stations["Latitude"] = [calc_pull._lat_dms_to_dd(i) for i in stations["Latitude"]]
 
     # Zip lat lon coords and convert to geodataframe
-    geometry = [Point(xy) for xy in zip(stations["Longitude"], stations["Latitude"])]
+    geometry = [
+        Point(xy)
+        for xy in zip(stations["Longitude"], stations["Latitude"], strict=False)
+    ]
     weccgeo = gp.GeoDataFrame(stations, crs="EPSG:4326", geometry=geometry)
 
     # Get bbox of WECC to use to filter stations against
@@ -128,7 +128,7 @@ def get_hads_stations(terrpath: str, marpath: str, directory: str) -> pd.DataFra
     ).drop_duplicates(["GOES NESDIS ID"], keep="first")
 
     # Drop columns
-    weccstations.drop(
+    weccstations = weccstations.drop(
         [
             "OBJECTID_1",
             "OBJECTID",
@@ -139,12 +139,11 @@ def get_hads_stations(terrpath: str, marpath: str, directory: str) -> pd.DataFra
             "index_right",
         ],
         axis=1,
-        inplace=True,
     )
 
     # Rename in_wecc to in_terr
-    weccstations.rename(
-        columns={"in_WECC": "in_terr_wecc", "in_marine": "in_mar_wecc"}, inplace=True
+    weccstations = weccstations.rename(
+        columns={"in_WECC": "in_terr_wecc", "in_marine": "in_mar_wecc"}
     )
 
     # Write stations to AWS bucket
@@ -190,7 +189,7 @@ def get_file_links(url: str) -> list[tuple[str, str]]:
     # get all 'last modified' dates
     dates = soup.find_all(string=re.compile(r"\d{4}-\d{2}-\d{2}"))
     dates = [i.strip() for i in dates]
-    links = list(zip(file_links, dates))
+    links = list(zip(file_links, dates, strict=False))
 
     return links
 
@@ -216,7 +215,7 @@ def link_to_aws(links: list[tuple[str, str]], directory: str):
     """
 
     # iterate through all links and download
-    for i, (file_link, dates) in enumerate(links):
+    for _i, (file_link, _dates) in enumerate(links):
         file_name = file_link.split("/")[-1]
         s3_obj = s3.Object(BUCKET_NAME, directory + file_name)
 
@@ -306,7 +305,7 @@ def get_hads_dat(directory: str, start_date: str | None = None, get_all: bool = 
                     # Filter links by file names already in folder, and files updated since last download
                     link_sub = []
                     date_sub = []
-                    for k, (link, date) in enumerate(links):
+                    for _k, (link, date) in enumerate(links):
                         if link.split("/")[-1] in alreadysaved:
                             date = datetime.strptime(date, "%Y-%m-%d %H:%M").replace(
                                 tzinfo=timezone.utc
@@ -321,7 +320,7 @@ def get_hads_dat(directory: str, start_date: str | None = None, get_all: bool = 
                         else:
                             link_sub.append(link)
                             date_sub.append(date)
-                    link_sub = list(zip(link_sub, date_sub))
+                    link_sub = list(zip(link_sub, date_sub, strict=False))
                     link_to_aws(link_sub, directory)
 
                 except:
@@ -412,7 +411,7 @@ def get_hads_update(
             link_sub = []
             date_sub = []
 
-            for k, (link, date) in enumerate(links):
+            for _k, (link, date) in enumerate(links):
                 if (
                     int(link.split("/")[-1].replace(".dat.gz", "").split("-")[-1])
                     in days_to_download
@@ -420,7 +419,7 @@ def get_hads_update(
                     link_sub.append(link)
                     date_sub.append(date)
 
-            link_sub = list(zip(link_sub, date_sub))
+            link_sub = list(zip(link_sub, date_sub, strict=False))
             link_to_aws(link_sub, directory)
 
         except Exception as e:

@@ -13,9 +13,10 @@ Functions
 
 """
 
-import pandas as pd
 import inspect
 import logging
+
+import pandas as pd
 
 
 def filter_columns(df: pd.DataFrame, logger: logging.Logger) -> pd.DataFrame:

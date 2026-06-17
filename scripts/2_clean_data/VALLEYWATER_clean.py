@@ -23,18 +23,16 @@ Intended Use
 Cleaned data for an individual network, priority variables, all times. Organized by station as zarr.
 """
 
-import xarray as xr
-import pandas as pd
-import numpy as np
-import warnings
 import sys
-import os
-import s3fs
-import boto3
-from datetime import datetime, timezone
-from pathlib import Path  # to get file suffix
 import time
+import warnings
+from datetime import datetime, timezone
 from typing import TypeIO
+
+import boto3
+import numpy as np
+import pandas as pd
+import xarray as xr
 
 BUCKET_NAME = "wecc-historical-wx"
 NETWORK = "VALLEYWATER"

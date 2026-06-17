@@ -4,11 +4,12 @@ This script runs tests that variable derivations perform as expected.
 To run: type "pytest test_derived_variables.py" from the command line
 """
 
+import os
+import sys
+
+import numpy as np
 import pandas as pd
 import pytest
-import sys
-import os
-import numpy as np
 
 ## Adding 2_clean_data.calc_clean to system path
 sys.path.append(os.path.abspath("../scripts/2_clean_data"))
@@ -16,11 +17,10 @@ sys.path.append(os.path.abspath("../scripts/2_clean_data"))
 from calc_clean import (
     _calc_dewpointtemp_opt1,
     _calc_dewpointtemp_opt2,
-    _calc_relhumid,
-    _calc_windmag,
-    _calc_winddir,
     _calc_ps,
     _calc_ps_alt,
+    _calc_relhumid,
+    _calc_windmag,
     _unit_pres_inHg_to_pa,
 )
 

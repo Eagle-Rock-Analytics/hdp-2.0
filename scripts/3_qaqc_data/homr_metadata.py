@@ -12,17 +12,18 @@ Functions
 
 Intended Use
 -------------
-Generates metadata for relevant stations. Run after a full pull. 
+Generates metadata for relevant stations. Run after a full pull.
 
 References
 ----------
 https://www.ncei.noaa.gov/access/homr/api
 """
 
-import requests
-import pandas as pd
-from io import StringIO, BytesIO
+from io import BytesIO, StringIO
+
 import boto3
+import pandas as pd
+import requests
 
 s3_cl = boto3.client("s3")
 
@@ -264,7 +265,8 @@ def get_all_homr_metadata(bucket_name: str, savedir: str):
 
 
 if __name__ == "__main__":
-    import os, sys
+    import os
+    import sys
 
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     from paths import BUCKET_NAME, QAQC_WX

@@ -22,34 +22,35 @@ Functions
 - before: Reads byte by byte backwards to return previous line from current cursor position.
 - get_timeouts: Given a list of files, generate URL, read last lines and add to timeout list for re-download if error found.
 - get_madis_station_timeout_csv: Timeout function search for MADIS specifically.
-- madis_retry_downloads: Check for missing files or stations in MADIS networks and attempts to redownload them. 
+- madis_retry_downloads: Check for missing files or stations in MADIS networks and attempts to redownload them.
 - scan_retry_downloads: Identifies if there are any missing station files in SCAN or SNOTEL due to timeout errors and attempts to re-download them.
-- maritime_retry_downloads: Identifies if there are any missing station files in MARITIME or NDBC and attempts to redownload them. 
+- maritime_retry_downloads: Identifies if there are any missing station files in MARITIME or NDBC and attempts to redownload them.
 - isd_retry_downloads: Identifies if there are any missing station files in ASOSAOWS and OtherISD due to timeout errors and attempts to re-download them
 - ids_get_missing_files: Identifies missing ISD files and attempts to redownload them from ISD server into AWS bucket.
 - download_comparison: Comparison of which stations downloaded, updating the station_list csv with y/n to download column.
-- update_station_list: Reads in station list and updates with "Download" pass/fail flag. 
-- retry_downloads: Primary function to attempt to retry timeout or missing station files per network. 
+- update_station_list: Reads in station list and updates with "Download" pass/fail flag.
+- retry_downloads: Primary function to attempt to retry timeout or missing station files per network.
 
 Intended Use
 ------------
-Run to ensure all available stations are retrievable per network, including failed downloads API timeouts are captured. Generates the "pull station list". 
+Run to ensure all available stations are retrievable per network, including failed downloads API timeouts are captured. Generates the "pull station list".
 """
 
-from MADIS_pull import get_madis_station_csv
-from SCANSNOTEL_pull import get_scan_station_data
-from ASOSAWOS_pullftp import get_asosawos_data_ftp, ftp_to_aws
-from OtherISD_pull import get_otherisd_data_ftp
-from MARITIME_pull import get_maritime
-import boto3
-import pandas as pd
-import config
-from smart_open import open
 import os
 from datetime import datetime
 from ftplib import FTP
 from io import StringIO
+
+import boto3
+import config
 import numpy as np
+import pandas as pd
+from ASOSAWOS_pullftp import ftp_to_aws, get_asosawos_data_ftp
+from MADIS_pull import get_madis_station_csv
+from MARITIME_pull import get_maritime
+from OtherISD_pull import get_otherisd_data_ftp
+from SCANSNOTEL_pull import get_scan_station_data
+from smart_open import open
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")
@@ -527,7 +528,7 @@ def isd_retry_downloads(network: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     # Get list of filenames where IDs have partially downloaded (years missing)
     downloaded_ids = station_list[~station_list["ISD-ID"].isin(missing_ids)]
     missing_files = pd.DataFrame()
-    for index, id in downloaded_ids.iterrows():
+    for _index, id in downloaded_ids.iterrows():
         if int(id["start_time"][0:4]) < 1980:
             years = range(1980, int(id["end_time"][0:4]) + 1)
 
@@ -547,7 +548,10 @@ def isd_retry_downloads(network: str) -> tuple[pd.DataFrame, pd.DataFrame]:
                 for missing_year in missing_years
             ]
             missing_files = pd.concat(
-                [missing_files, pd.DataFrame(zip(missing_years, filenames))]
+                [
+                    missing_files,
+                    pd.DataFrame(zip(missing_years, filenames, strict=False)),
+                ]
             )
 
     # Add column name
@@ -704,7 +708,7 @@ def download_comparison(network: str):
 
     # Reorders the indices in both stationlists
     # Previously was the full index from station_table, so there was a mismatch in index and actual number of provided stations
-    station_csv.reset_index(inplace=True, drop=True)
+    station_csv = station_csv.reset_index(drop=True)
 
     # Write stations to respective AWS bucket
     new_buffer = StringIO()

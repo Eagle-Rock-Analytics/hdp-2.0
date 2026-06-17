@@ -1,7 +1,7 @@
 """
 update_pull.py
 
-This script contains the functions needed to retrieve updated, or "newer" data per network, following a "full pull" of data. 
+This script contains the functions needed to retrieve updated, or "newer" data per network, following a "full pull" of data.
 Data will be downloaded from the last date updated in AWS until 45 days prior to the present day (the window of final data).
 
 Functions
@@ -18,10 +18,10 @@ Functions
 
 Intended Use
 ------------
-This script will be run to retrieve "newer" data since the date of the last data retrieval. 
-Example: 
->> A "Full Pull" for HADS occurred Jan 15, 2024. 
->> A "Update Pull" using this script would retrieve all data from Jan 15, 2024 up to 45 days prior to present day. 
+This script will be run to retrieve "newer" data since the date of the last data retrieval.
+Example:
+>> A "Full Pull" for HADS occurred Jan 15, 2024.
+>> A "Update Pull" using this script would retrieve all data from Jan 15, 2024 up to 45 days prior to present day.
 
 Notes
 -----
@@ -29,18 +29,19 @@ Notes
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
 import ASOSAWOS_pullftp
-from SCANSNOTEL_pull import get_scan_station_data
-from OtherISD_pull import get_wecc_stations, get_otherisd_data_ftp
-from CW3E_pull import get_cw3e_metadata, get_cw3e_update
-from CIMIS_pull import get_cimis_update_ftp
-from HADS_pull import get_hads_update
-from MARITIME_pull import get_maritime_update, get_maritime_station_ids
-from MADIS_pull import madis_update
-from stnlist_update_pull import retry_downloads
 import boto3
 import config
+from CIMIS_pull import get_cimis_update_ftp
+from CW3E_pull import get_cw3e_metadata, get_cw3e_update
+from HADS_pull import get_hads_update
+from MADIS_pull import madis_update
+from MARITIME_pull import get_maritime_station_ids, get_maritime_update
+from OtherISD_pull import get_otherisd_data_ftp, get_wecc_stations
+from SCANSNOTEL_pull import get_scan_station_data
+from stnlist_update_pull import retry_downloads
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")

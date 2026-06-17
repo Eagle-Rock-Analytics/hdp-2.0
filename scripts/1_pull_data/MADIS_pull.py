@@ -7,8 +7,8 @@ Functions
 ---------
 - get_network_metadata: Calls Synoptic API to get network metadata and save to AWS
 - get_madis_metadata: produces a list of station IDs filtered by bounding box and network
-- get_madis_station_csv: Download network data from Synoptic API. 
-- get_madis_station_csv_update: Download updated network data from Synoptic API. 
+- get_madis_station_csv: Download network data from Synoptic API.
+- get_madis_station_csv_update: Download updated network data from Synoptic API.
 - madis_pull: Pulls the raw data from a MADIS network.
 - madis_update: Pulls the updated raw data from a MADIS network.
 
@@ -22,14 +22,14 @@ Notes
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
-import requests
-import pandas as pd
-from datetime import datetime
 import re
-import boto3
+from datetime import datetime
 from io import StringIO
-import config  # Import API keys.
 
+import boto3
+import config  # Import API keys.
+import pandas as pd
+import requests
 from calc_pull import get_wecc_poly
 
 s3 = boto3.resource("s3")
@@ -181,7 +181,7 @@ def get_madis_station_csv(
     # Set end time to be current time at beginning of download
     end_api = datetime.now().strftime("%Y%m%d%H%M")
 
-    for index, id in ids.iterrows():
+    for _index, id in ids.iterrows():
         # Set start date
         if start_date is None:
             # Adding error handling for NaN dates
@@ -200,7 +200,7 @@ def get_madis_station_csv(
             start_api = start_date
 
         # If station file is 2_/3_ etc., get station name
-        if options.get("timeout") == True:
+        if options.get("timeout"):
             id["STID"] = id["STID"].split("_")[-1]
 
         # Generate URL
@@ -214,7 +214,7 @@ def get_madis_station_csv(
             s3_obj = s3.Object(BUCKET_NAME, directory + f"{id_stn}.csv")
 
             # If **options timeout = True, save file as 2_STID.csv
-            if options.get("timeout") == True:
+            if options.get("timeout"):
                 prefix = options.get("round")
                 s3_obj = s3.Object(BUCKET_NAME, directory + f"{prefix}_{id_stn}.csv")
 
@@ -311,7 +311,7 @@ def get_madis_station_csv_update(
     else:
         end_api = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y%m%d%H%M")
 
-    for index, id in ids.iterrows():  # For each station
+    for _index, id in ids.iterrows():  # For each station
         # Set start date
         if start_date is None:
             # Adding error handling for NaN dates
@@ -329,7 +329,7 @@ def get_madis_station_csv_update(
             start_api = datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y%m%d%H%M")
 
         # If station file is 2_/3_ etc., get station name
-        if options.get("timeout") == True:
+        if options.get("timeout"):
             id["STID"] = id["STID"].split("_")[-1]
 
         # Generate URL
@@ -342,14 +342,14 @@ def get_madis_station_csv_update(
             # Set up filename, given parameters
             filename = directory + f"{id_stn}.csv"
             if options.get("extension") is not None:
-                if options.get("timeout") == True:
+                if options.get("timeout"):
                     prefix = options.get("round")
                     ext = options.get("extension")
                     filename = directory + f"{prefix}_{id_stn}_{ext}.csv"
                 else:
                     filename = directory + f"{id_stn}_{ext}.csv"
 
-            elif options.get("timeout") == True:
+            elif options.get("timeout"):
                 prefix = options.get("round")
                 filename = directory + f"{prefix}_{id_stn}.csv"
 
@@ -436,7 +436,7 @@ def madis_pull(
     else:
         networkdf = get_network_metadata(token)
         mask = [
-            any([re.search(r"\b" + kw + r"\b", r) for kw in networks])
+            any(re.search(r"\b" + kw + r"\b", r) for kw in networks)
             for r in networkdf["SHORTNAME"]
         ]
         networkdf = networkdf[mask]
@@ -453,14 +453,15 @@ def madis_pull(
             return
 
     # By network, download data
-    for index, row in networkdf.iterrows():
+    for _index, row in networkdf.iterrows():
         dirname = row["SHORTNAME"]
         print(f"Downloading data for {dirname} network")
         if pause:
             # Set up pause function for large networks
             if row["REPORTING_STATIONS"] >= 1000:
+                n_stations = row["REPORTING_STATIONS"]
                 resp = input(
-                    f"Warning: This network contains {row["REPORTING_STATIONS"]} stations. Are you ready to download it? (Y/N)"
+                    f"Warning: This network contains {n_stations} stations. Are you ready to download it? (Y/N)"
                 )
                 if resp == "N":
                     print("Skipping to next network.")
@@ -536,7 +537,7 @@ def madis_update(
     else:
         networkdf = get_network_metadata(token)
         mask = [
-            any([re.search(r"\b" + kw + r"\b", r) for kw in networks])
+            any(re.search(r"\b" + kw + r"\b", r) for kw in networks)
             for r in networkdf["SHORTNAME"]
         ]
         networkdf = networkdf[mask]
@@ -553,14 +554,15 @@ def madis_update(
             return
 
     # By network, download data
-    for index, row in networkdf.iterrows():
+    for _index, row in networkdf.iterrows():
         dirname = row["SHORTNAME"]
         print(f"Downloading data for network: {dirname}")
         # set up pause for large networks
         if pause:
             if row["REPORTING_STATIONS"] >= 1000:
+                n_stations = row["REPORTING_STATIONS"]
                 resp = input(
-                    f"Warning: This network contains {row["REPORTING_STATIONS"]} stations. Are you ready to download it? (Y/N)"
+                    f"Warning: This network contains {n_stations} stations. Are you ready to download it? (Y/N)"
                 )
                 if resp == "N":
                     print("Skipping to next network.")

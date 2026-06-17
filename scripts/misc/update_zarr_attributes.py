@@ -1,8 +1,8 @@
 """
 update_zarr_attributes.py
 
-Script to add or update a specified attribute on all Zarr datasets referenced 
-in an Intake-ESM catalog stored on S3, consolidating metadata to ensure the 
+Script to add or update a specified attribute on all Zarr datasets referenced
+in an Intake-ESM catalog stored on S3, consolidating metadata to ensure the
 attribute is recognized by tools like Zarr and xarray.
 
 Key features:
@@ -27,10 +27,11 @@ Requirements:
 """
 
 import time
-import zarr
-import intake
-from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import intake
+import zarr
+from tqdm import tqdm
 
 # Attribute key and value to update
 ATTR_KEY = "DOI"

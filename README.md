@@ -1,4 +1,4 @@
-# Historical Observations Data Platform 
+# Historical Observations Data Platform
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.16370139.svg)](https://doi.org/10.5281/zenodo.16370139)
@@ -7,19 +7,19 @@
 
 The [Historical Observations Data Platform](https://eaglerockanalytics.com/project/historical-observations-data-platform/) is a cloud-based, historical weather observations data platform to enable California's energy sector access to high-quality, open climate and weather data. This work is supported by California Energy Commission grant PIR-19-006. This repository contains the code (via Python scripts and Jupyter Notebooks) associated with the full processing pipeline for data ingestion into the Historical Data Platform.
 
-The Platform responds to community partner needs in understanding weather and climate information including the severity, duration, frequency, and rate of change over time of extreme weather events, as well as supporting projections downscaling efforts. We implement stringent Quality Assurance/Quality Control (QA/QC) procedures in line with international protocols and with customized modifications relevant to energy sector (such as temperature and precipitation extremes, winds, and solar radiation). 
+The Platform responds to community partner needs in understanding weather and climate information including the severity, duration, frequency, and rate of change over time of extreme weather events, as well as supporting projections downscaling efforts. We implement stringent Quality Assurance/Quality Control (QA/QC) procedures in line with international protocols and with customized modifications relevant to energy sector (such as temperature and precipitation extremes, winds, and solar radiation).
 
 
-## 📊 About the data 
-The Platform has sourced station data from from 27 publicly available historical data observation networks across the Western Electricity Coordinating Council (WECC) domain from 1980-2022 (time period varies between networks and stations). **15,064 stations** total have completed the full quality control and standardization pipelines and are publically available as [cloud-optimized zarrs](https://zarr.dev/) in [Amazon s3 storage](https://cadcat.s3.amazonaws.com/index.html#histwxstns/). 
+## 📊 About the data
+The Platform has sourced station data from from 27 publicly available historical data observation networks across the Western Electricity Coordinating Council (WECC) domain from 1980-2022 (time period varies between networks and stations). **15,064 stations** total have completed the full quality control and standardization pipelines and are publically available as [cloud-optimized zarrs](https://zarr.dev/) in [Amazon s3 storage](https://cadcat.s3.amazonaws.com/index.html#histwxstns/).
 
-The following figure shows the locations of all the stations (by network) that have completed our quality control and standardization process: 
+The following figure shows the locations of all the stations (by network) that have completed our quality control and standardization process:
 
 <img src="figures/station_coverage_map.png" alt="Station coverage map" width="400"/>
 
 
 
-And here you can see the number of observations throughout the project's time period: 
+And here you can see the number of observations throughout the project's time period:
 <img src="figures/merge_stations_over_time.png" alt="Merge stations over time" width="500"/>
 
 ---
@@ -32,16 +32,16 @@ historical-obs-platform/
 ├── data-access/               # Code examples for accessing our data
 ├── environment/               # Files for building the computational environment, including a README with further instructions
 ├── figures/                   # Visualizations
-├── notebooks/                 # Jupyter notebooks for data visualization and analysis 
-├── scripts/                   # Data processing code for all steps of the QAQC process 
-│   ├── 1_pull_data/           # Scripts for retrieving/scrape network station data from their respective sources 
+├── notebooks/                 # Jupyter notebooks for data visualization and analysis
+├── scripts/                   # Data processing code for all steps of the QAQC process
+│   ├── 1_pull_data/           # Scripts for retrieving/scrape network station data from their respective sources
 │   ├── 2_clean_data/          # Scripts for cleaning individual networks to a consistent standard
-│   ├── 3_qaqc_data/           # Scripts to QA/QC stations 
+│   ├── 3_qaqc_data/           # Scripts to QA/QC stations
 │   ├── 4_merge_data/          # Scripts to close out processing, and standardize to hourly timesteps. Data at conclusion have been fully processed.
 │   ├── misc/                  # Scripts that don't fit into any other categories
-│   ├── pcluster/              # Code and shell scripts for running QAQC and merge scripts in an AWS pcluster environment 
+│   ├── pcluster/              # Code and shell scripts for running QAQC and merge scripts in an AWS pcluster environment
 │   └── tests/                 # Scripts for testing finalized data products
-└──    
+└──
 ```
 
 ## 🖥️ For developers: Running QAQC and MERGE steps
@@ -72,11 +72,11 @@ historical-obs-platform/
    # All networks
    ./scripts/4_merge_data/run_stnlist_update_merge.sh
 ```
-  
 
-## 🛠️ Computational Environment 
 
-See the [environment](https://github.com/Eagle-Rock-Analytics/historical-obs-platform/tree/main/environment) folder for instructions and files for building the computational environment for this project. 
+## 🛠️ Computational Environment
+
+See the [environment](https://github.com/Eagle-Rock-Analytics/historical-obs-platform/tree/main/environment) folder for instructions and files for building the computational environment for this project.
 
 ## 🔏 License
 
@@ -90,4 +90,3 @@ This project is licensed under the GNU GPLv3 - see the [LICENSE](LICENSE) file f
 ## 🧑‍💻 Contributors
 
 [![Contributors](https://contrib.rocks/image?repo=Eagle-Rock-Analytics/historical-obs-platform&nocache=1)](https://github.com/Eagle-Rock-Analytics/historical-obs-platform/graphs/contributors)
-

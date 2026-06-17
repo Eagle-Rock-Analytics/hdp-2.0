@@ -21,16 +21,16 @@ Notes
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
-import requests
-from datetime import datetime, date
-import pandas as pd
-import boto3
+from datetime import date, datetime
 from io import StringIO
-from shapely.geometry import Point
-import geopandas as gp
-from geopandas.tools import sjoin
 
+import boto3
+import geopandas as gp
+import pandas as pd
+import requests
 from calc_pull import get_wecc_poly
+from geopandas.tools import sjoin
+from shapely.geometry import Point
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
@@ -122,7 +122,10 @@ def get_maritime_station_ids(
     stations["LONGITUDE"] = mar_lon
 
     # Zip lat lon coords and convert to geodataframe
-    geometry = [Point(xy) for xy in zip(stations["LONGITUDE"], stations["LATITUDE"])]
+    geometry = [
+        Point(xy)
+        for xy in zip(stations["LONGITUDE"], stations["LATITUDE"], strict=False)
+    ]
     weccgeo = gp.GeoDataFrame(stations, crs="EPSG:4326", geometry=geometry)
 
     # get bbox of WECC to use to filter stations against
@@ -143,7 +146,7 @@ def get_maritime_station_ids(
     ).drop_duplicates(["STATION_ID"], keep="first")
 
     # drop columns and rename in_wecc to in_terr
-    weccstations.drop(
+    weccstations = weccstations.drop(
         [
             "OBJECTID_1",
             "OBJECTID",
@@ -154,10 +157,9 @@ def get_maritime_station_ids(
             "index_right",
         ],
         axis=1,
-        inplace=True,
     )
-    weccstations.rename(
-        columns={"in_WECC": "in_terr_wecc", "in_marine": "in_mar_wecc"}, inplace=True
+    weccstations = weccstations.rename(
+        columns={"in_WECC": "in_terr_wecc", "in_marine": "in_mar_wecc"}
     )
 
     # Identify which buoys are moored buoys (46xxx) and which are C-MAN/water level obs network/other
@@ -369,7 +371,7 @@ def get_maritime_update(
             years = list(map(str, range(1980, int(datetime.now().year) + 1)))
         else:
             years = list(map(str, range(1980, int(end_date[0:4]) + 1)))
-            end_month = datetime.strptime(end_date, "%Y-%m-%d").month
+            datetime.strptime(end_date, "%Y-%m-%d").month
     else:
         start_year = int(start_date[0:4])
         start_month = datetime.strptime(start_date, "%Y-%m-%d").month
@@ -377,7 +379,7 @@ def get_maritime_update(
             years = list(map(str, range(start_year, int(datetime.now().year) + 1)))
         else:
             years = list(map(str, range(start_year, int(end_date[0:4]) + 1)))
-            end_month = datetime.strptime(end_date, "%Y-%m-%d").month
+            datetime.strptime(end_date, "%Y-%m-%d").month
 
     # Set up cross year flag
     if int(datetime.now().strftime("%j")) <= 45:

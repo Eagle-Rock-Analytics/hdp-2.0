@@ -27,11 +27,12 @@ Example usage
 python CW3E_combine.py
 """
 
-import xarray as xr
-import s3fs
-import pandas as pd
-import boto3
 from time import time
+
+import boto3
+import pandas as pd
+import s3fs
+import xarray as xr
 
 
 def get_filenames_in_s3_folder(bucket: str, folder: str) -> list[str]:

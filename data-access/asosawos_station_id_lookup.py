@@ -108,12 +108,12 @@ def asosawos_station_lookup(code: str | None = None, city: str | None = None) ->
 if __name__ == "__main__":
 
     city_or_code = input(
-        f"Would you like to input a city, airport name, or code? (type 'city', 'airport', or 'code'): "
+        "Would you like to input a city, airport name, or code? (type 'city', 'airport', or 'code'): "
     )
 
     if city_or_code == "code":
-        input_code = input(f"Please type the four-letter airport code (ex: KSAC): ")
+        input_code = input("Please type the four-letter airport code (ex: KSAC): ")
         asosawos_station_lookup(code=input_code)
     elif city_or_code == "city" or city_or_code == "airport":
-        input_city = input(f"Please type the city or airport name: ")
+        input_city = input("Please type the city or airport name: ")
         asosawos_station_lookup(city=input_city)

@@ -21,29 +21,30 @@ Intended Use
 Used in the case study analysis for ease of comparison and tidy notebooks.
 """
 
+import datetime
+import os
+import sys
+from io import BytesIO
+
 import boto3
-from pyproj import CRS, Transformer
+import cartopy.crs as ccrs
+import cartopy.feature as cf
 import geopandas as gpd
-from geopandas import GeoDataFrame
-from shapely.geometry import Point, Polygon
-import xarray as xr
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import cartopy.feature as cf
+import xarray as xr
+from geopandas import GeoDataFrame
 from matplotlib.ticker import MaxNLocator
-import cartopy.crs as ccrs
-import datetime
-import sys
-import os
-from io import BytesIO
+from pyproj import CRS, Transformer
+from shapely.geometry import Point, Polygon
 
 # accessible color palette
 plt.style.use("tableau-colorblind10")
 
 # Import qaqc stage plot functions
 sys.path.append(os.path.abspath("../scripts/3_qaqc_data"))
-from qaqc_plot import flagged_timeseries_plot, _plot_format_helper, id_flag
+from qaqc_plot import _plot_format_helper, id_flag
 
 CENSUS_SHP = "s3://wecc-historical-wx/0_maps/ca_counties/CA_Counties.shp"
 
@@ -278,10 +279,7 @@ def subset_eval_stns(
     elif event_to_eval == "mudslide":
         counties_to_grab = ["Santa Barbara"]
 
-    elif event_to_eval == "AR":
-        counties_to_grab = []  # CA
-
-    elif event_to_eval == "aug2020_heatwave":
+    elif event_to_eval == "AR" or event_to_eval == "aug2020_heatwave":
         counties_to_grab = []  # CA
 
     elif event_to_eval == "sep2020_heatwave":
@@ -341,7 +339,7 @@ def subset_eval_stns(
 
     geometry = [
         Point(latlon_to_mercator_cartopy(lat, lon))
-        for lat, lon in zip(event_stns.latitude, event_stns.longitude)
+        for lat, lon in zip(event_stns.latitude, event_stns.longitude, strict=False)
     ]
     event_stns = GeoDataFrame(event_stns, geometry=geometry).set_crs(
         crs="EPSG:3857", allow_override=True
@@ -363,7 +361,7 @@ def subset_eval_stns(
             )
         return eval_stns
 
-    if subset != None:
+    if subset is not None:
         if num_event_stns_local <= subset:
             eval_stns = event_stns_local
         else:
@@ -581,7 +579,7 @@ def find_other_events(
     # event_sub = event_sub.loc[event_sub["notes"] != "manual check on end date"]
 
     # subset to make more manageable
-    if subset != None:
+    if subset is not None:
         if len(event_sub) <= subset:
             eval_stns = event_sub
         else:
@@ -681,9 +679,7 @@ def stn_visualize(stn_id, stn_list, event_to_eval):
     ax.plot(x, y, ".r", markersize=4)
     ax.annotate(f"{stn_id}", xy=(x, y), xytext=(x + 10, y + 10), fontsize=6)
     # station name
-    gl = ax.gridlines(
-        crs=ccrs.PlateCarree(), draw_labels=["bottom", "left"], ls=":", lw=0.5
-    )
+    ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=["bottom", "left"], ls=":", lw=0.5)
     ax.set_title(f"{event_to_eval} evaluation \nat {stn_id}")
 
     return None
@@ -763,7 +759,7 @@ def event_plot(
                 label=flag_label,
             )
 
-    legend = ax.legend(loc="upper left", prop={"size": 8})
+    ax.legend(loc="upper left", prop={"size": 8})
 
     # plot aesthetics
     ylab, units, miny, maxy = _plot_format_helper(var)
@@ -900,14 +896,14 @@ def event_plot_multiple_stations(
     ylab, units, miny, maxy = _plot_format_helper(var)
     plt.ylabel(f"{ylab} [{units}]")
     plt.xlabel("")
-    stn = df["station"].unique()[0]
+    df["station"].unique()[0]
     plt.title(
         f"QA/QC event evaluation: {event}",
         fontsize=10,
     )
 
     # Set name of saved figure
-    if figname == None:
+    if figname is None:
         figname = f"{event}_case_study_multi_station_test.png"
 
     # save to AWS

@@ -14,15 +14,14 @@ Functions
 
 Intended Use
 ------------
-Script functions assess QA/QC on frequent value occurrence, as a part of the QA/QC pipeline. 
+Script functions assess QA/QC on frequent value occurrence, as a part of the QA/QC pipeline.
 """
+
+import math
 
 import numpy as np
 import pandas as pd
-import datetime
-import math
 from log_config import logger
-
 from qaqc_plot import *
 from qaqc_utils import *
 
@@ -112,7 +111,7 @@ def qaqc_frequent_vals(
 
             # first scans suspect values using entire record -- this is the per variable check?
             # all years
-            if df_valid[var].isna().all() == True:
+            if df_valid[var].isna().all():
                 continue  # bypass to next variable if all obs are nans
 
             df_valid = frequent_bincheck(
@@ -177,7 +176,7 @@ def qaqc_frequent_vals(
             df_valid.loc[df_valid[var + "_eraqc"] == 100, var + "_eraqc"] = np.nan
 
             # apply unique df_valid flags into full df
-            isFlagged = df_valid.loc[df_valid[var + "_eraqc"].isnull() == False]
+            isFlagged = df_valid.loc[not df_valid[var + "_eraqc"].isnull()]
             for i in isFlagged.index:
                 flag_to_place = isFlagged.loc[isFlagged.index == i][
                     var + "_eraqc"
@@ -303,7 +302,7 @@ def frequent_bincheck(
     elif data_group == "annual":
         for yr in df_to_test.year.unique():
             df_yr = df_to_test.loc[df_to_test["year"] == yr]
-            if df_yr[var].isna().all() == True:  # some vars will have nan years
+            if df_yr[var].isna().all():  # some vars will have nan years
                 continue
             bins = create_bins_frequent(df_yr, var)  # using 1 degC/hPa bin width
             bar_counts, bins = np.histogram(df_yr[var], bins=bins)
@@ -331,7 +330,7 @@ def frequent_bincheck(
                 | (df_to_test["month"] == szn[1])
                 | (df_to_test["month"] == szn[2])
             ]
-            if df_szn[var].isna().all() == True:
+            if df_szn[var].isna().all():
                 continue
             bins = create_bins_frequent(df_szn, var)  # using 1 degC/hPa bin width
             bar_counts, bins = np.histogram(df_szn[var], bins=bins)
@@ -367,9 +366,7 @@ def frequent_bincheck(
                         )
                     ]
 
-                    if (
-                        df_szn[var].isna().all() == True
-                    ):  # some vars will have nan years
+                    if df_szn[var].isna().all():  # some vars will have nan years
                         continue
 
                     if yr == df_szn.loc[df_szn.index[-1], "year"]:
@@ -427,9 +424,7 @@ def frequent_bincheck(
                         )
                         df_djf = pd.concat([df_d, df_jf])
 
-                    if (
-                        df_djf[var].isna().all() == True
-                    ):  # some vars will have nan years
+                    if df_djf[var].isna().all():  # some vars will have nan years
                         continue
 
                     bins = create_bins_frequent(
@@ -533,10 +528,7 @@ def bins_to_flag(
         bin_end = i + 4
 
         # need handling for first 3 blocks as there is no front
-        if i < 3:
-            bin_start = 0
-        else:
-            bin_start = i - 3
+        bin_start = 0 if i < 3 else i - 3
 
         bin_block_sum = bar_counts[
             bin_start:bin_end
@@ -547,13 +539,13 @@ def bins_to_flag(
         bin_block_50 = bin_block_sum * 0.5  # primary check at 50%
         bin_block_90 = bin_block_sum * 0.9  # secondary check at 90%
 
-        if (bin_main_sum > bin_block_50) == True:
+        if bin_main_sum > bin_block_50:
             # ensure that bin_main_sum is greater than bin_main_thresh
             if bin_main_sum > bin_main_thresh:
                 bins_to_flag.append(math.floor(bins[i]))
 
                 # annual/seasonal check
-                if (bin_main_sum > bin_block_90) == True:
+                if bin_main_sum > bin_block_90:
                     if bin_main_sum > secondary_bin_main_thresh:
                         bins_to_flag.append(math.floor(bins[i]))
 

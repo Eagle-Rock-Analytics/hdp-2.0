@@ -27,18 +27,18 @@ Script functions assess QA/QC on the entire station, as a part of the QA/QC pipe
 
 import os
 import sys
+import urllib
+
 import geopandas as gp
-import shapely
 import numpy as np
 import pandas as pd
-import xarray as xr
-import shapely
-import urllib
 import requests
+import shapely
+import xarray as xr
 from log_config import logger
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import WECC_TERR, WECC_MAR, ASCC, MRO
+from paths import ASCC, WECC_MAR, WECC_TERR
 
 try:
     from qaqc_utils import *
@@ -307,7 +307,7 @@ def _grab_dem_elev_m(lats_to_check: list[float], lons_to_check: list[str]) -> fl
         dem_elev_short = np.round(dem_elev_long, decimals=2)
         return dem_elev_short.astype("float")
 
-    except Exception as e:
+    except Exception:
         logger.info(
             "In-filling failed, may be related to DEM server. In-filling with 0.0m, but should be checked"
         )
@@ -421,10 +421,10 @@ def qaqc_elev_infill(df: pd.DataFrame) -> pd.DataFrame | None:
     logger.info("Running: qaqc_elev_infill")
 
     # first check to see if any elev value is missing
-    if df["elevation"].isnull().any() == True:
+    if df["elevation"].isnull().any():
         # all elevation values are reported as nan (some ndbc/maritime)
 
-        if df["elevation"].isnull().values.all() == True:
+        if df["elevation"].isnull().values.all():
             try:  # in-fill if value is missing
                 # check if lat-lon has changed over time
                 nan_lats = df["lat"].unique()
@@ -440,10 +440,10 @@ def qaqc_elev_infill(df: pd.DataFrame) -> pd.DataFrame | None:
                         dem_elev_value = _grab_dem_elev_m(
                             list(nan_lats), list(nan_lons)
                         )
-                        df.loc[df["elevation"].isnull() == True, "elevation_eraqc"] = (
+                        df.loc[df["elevation"].isnull(), "elevation_eraqc"] = (
                             3  # see era_qaqc_flag_meanings.csv
                         )
-                        df.loc[df["elevation"].isnull() == True, "elevation"] = float(
+                        df.loc[df["elevation"].isnull(), "elevation"] = float(
                             dem_elev_value
                         )
 
@@ -451,10 +451,10 @@ def qaqc_elev_infill(df: pd.DataFrame) -> pd.DataFrame | None:
                         logger.info(
                             "Station has a single lat-lon pair outside range of DEM, missing all elevations -- manually setting to 0.0m (buoys)"
                         )
-                        df.loc[df["elevation"].isnull() == True, "elevation_eraqc"] = (
+                        df.loc[df["elevation"].isnull(), "elevation_eraqc"] = (
                             5  # see era_qaqc_flag_meanings.csv
                         )
-                        df.loc[df["elevation"].isnull() == True, "elevation"] = float(
+                        df.loc[df["elevation"].isnull(), "elevation"] = float(
                             0.00
                         )  # manual infilling for buoys
 
@@ -481,7 +481,7 @@ def qaqc_elev_infill(df: pd.DataFrame) -> pd.DataFrame | None:
         else:  # multiple values for elevation, infill each instance if missing/incorrectly coded (e.g., zeros when shouldnt be)
             try:
                 # locate all instances of nan values as elevation codes
-                nan_coded = df[df["elevation"].isnull() == True]
+                nan_coded = df[df["elevation"].isnull()]
                 nan_lats = nan_coded["lat"].unique()
                 nan_lons = nan_coded["lon"].unique()
 
@@ -494,10 +494,10 @@ def qaqc_elev_infill(df: pd.DataFrame) -> pd.DataFrame | None:
                         logger.info(
                             "Station has a single lat-lon pair, missing some elevation values -- attempting to in-fill from station"
                         )
-                        df.loc[df["elevation"].isnull() == True, "elevation_eraqc"] = (
+                        df.loc[df["elevation"].isnull(), "elevation_eraqc"] = (
                             4  # see era_qaqc_flag_meanings.csv
                         )
-                        df.loc[df["elevation"].isnull() == True, "elevation"] = df[
+                        df.loc[df["elevation"].isnull(), "elevation"] = df[
                             "elevation"
                         ].iloc[0]
                     else:  # lat-lon of missing elev does not match station lat-lon (has shifted), infill from dem
@@ -505,10 +505,10 @@ def qaqc_elev_infill(df: pd.DataFrame) -> pd.DataFrame | None:
                             "Station has different lat-lon pair of missing elevation value from station lat-lon (shifted) -- attempting to infill from DEM"
                         )
                         dem_elev_value = _grab_dem_elev_m(nan_lats[0], nan_lons[0])
-                        df.loc[df["elevation"].isnull() == True, "elevation_eraqc"] = (
+                        df.loc[df["elevation"].isnull(), "elevation_eraqc"] = (
                             3  # see era_qaqc_flag_meanings.csv
                         )
-                        df.loc[df["elevation"].isnull() == True, "elevation"] = float(
+                        df.loc[df["elevation"].isnull(), "elevation"] = float(
                             dem_elev_value
                         )
 
@@ -872,7 +872,7 @@ def flag_summary(df: pd.DataFrame):
         unique_flags = df[var].unique()
         logger.info(f"Flags set on {var}: {unique_flags}")  # unique flag values
         df_len = len(df)
-        df_false = len(df.loc[(df[var].isnull() == False)])
+        df_false = len(df.loc[(not df[var].isnull())])
         df_per = round((df_false / df_len) * 100, 3)
         logger.info(
             f"Coverage of {var} obs flagged: {df_false} of {df_len} obs ({df_per}%)"

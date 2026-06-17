@@ -14,9 +14,10 @@ Intended Use
 Import into merge workflows to generate information for the QAQC success report.
 """
 
-import pandas as pd
-import logging
 import inspect
+import logging
+
+import pandas as pd
 
 
 def eraqc_counts_native_timestep(

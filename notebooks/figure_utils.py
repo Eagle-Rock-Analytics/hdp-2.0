@@ -14,18 +14,17 @@ Intended Use
 Script functions used in visualization notebooks to generate figures
 """
 
-import boto3
-import pandas as pd
-import numpy as np
-import matplotlib.pylab as plt
-import matplotlib
+from datetime import date, datetime, timezone
 from io import BytesIO
-from datetime import datetime, timezone, date
-import geopandas as gpd
-import contextily as cx
 
-from shapely.geometry import mapping, Point
+import boto3
+import contextily as cx
+import geopandas as gpd
+import matplotlib
+import matplotlib.pylab as plt
+import pandas as pd
 import pyproj
+from shapely.geometry import Point
 
 # Set AWS credentials
 s3 = boto3.resource("s3")
@@ -155,7 +154,7 @@ def get_station_chart(phase: str) -> tuple[pd.DataFrame, int] | None:
     # Get period of months for range of dates for each station
     station_list["period"] = [
         pd.period_range(*v, freq="M")
-        for v in zip(station_list["start-date"], station_list["end-date"])
+        for v in zip(station_list["start-date"], station_list["end-date"], strict=False)
     ]
 
     subdf = station_list[station_list.period.str.len() > 0]
@@ -319,7 +318,7 @@ def get_station_map_v1(phase: str, shapepath: str) -> None:
 
     # Remove territories, AK, HI
     rem_list = ["HI", "AK", "MP", "GU", "AS", "PR", "VI"]
-    us = us.loc[us.STUSPS.isin(rem_list) == False]
+    us = us.loc[not us.STUSPS.isin(rem_list)]
 
     # Use to clip stations
     us = us.to_crs(epsg=3857)
@@ -405,7 +404,7 @@ def get_station_map_v2(phase: str, shapepath: str) -> None:
 
     # Remove territories, AK, HI
     rem_list = ["HI", "AK", "MP", "GU", "AS", "PR", "VI"]
-    us = us.loc[us.STUSPS.isin(rem_list) == False]
+    us = us.loc[not us.STUSPS.isin(rem_list)]
 
     # Use to clip stations
     us = us.to_crs(epsg=3857)
@@ -492,7 +491,7 @@ def get_service_area_map(
 
     # Remove territories, AK, HI
     service_territories = service_territories.to_crs(gdf_wm.crs)
-    iou_area = service_territories.loc[service_territories.ABR.isin([IOU]) == True]
+    iou_area = service_territories.loc[service_territories.ABR.isin([IOU])]
 
     # Use to clip stations
     gdf_iou = gdf_wm.clip(iou_area)
@@ -575,7 +574,7 @@ def clip_gpd_to_shapefile(
     # Add geometry column to gdf
     geom = [
         Point(_latlon_to_mercator_cartopy(lat, lon))
-        for lat, lon in zip(gdf.latitude, gdf.longitude)
+        for lat, lon in zip(gdf.latitude, gdf.longitude, strict=False)
     ]
 
     # Adds coordinates

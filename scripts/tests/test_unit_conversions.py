@@ -4,28 +4,29 @@ This script runs tests that unit conversions perform as expected.
 To run: type "pytest test_unit_conversions.py" from the command line
 """
 
+import sys
+
 import pandas as pd
 import pytest
-import sys
 
 ## Adding 2_clean_data.calc_clean to system path
 sys.path.append(os.path.abspath("../scripts/2_clean_data"))
 
 from calc_clean import (
+    _lat_DMm_to_Dd,
+    _lat_dms_to_dd,
+    _lon_DMm_to_Dd,
+    _lon_dms_to_dd,
     _unit_degC_to_K,
     _unit_degF_to_K,
-    _unit_precip_in_to_mm,
-    _unit_windspd_kts_to_ms,
-    _unit_windspd_mph_to_ms,
-    _unit_pres_hpa_to_pa,
-    _unit_pres_kpa_to_pa,
-    _unit_pres_inHg_to_pa,
     _unit_elev_ft_to_m,
     _unit_moisture_gkg_to_kgkg,
-    _lat_dms_to_dd,
-    _lat_DMm_to_Dd,
-    _lon_dms_to_dd,
-    _lon_DMm_to_Dd,
+    _unit_precip_in_to_mm,
+    _unit_pres_hpa_to_pa,
+    _unit_pres_inHg_to_pa,
+    _unit_pres_kpa_to_pa,
+    _unit_windspd_kts_to_ms,
+    _unit_windspd_mph_to_ms,
 )
 
 

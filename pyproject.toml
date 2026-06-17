@@ -84,7 +84,6 @@ lint.select = [
     "N",   # pep8 naming conventions
     "W",   # pycodestyle warnings
     "C4",  # flake8-comprehensions
-    "PD",  # pandas best practices
     "SIM", # simplification
 ]
 lint.ignore = [
@@ -93,7 +92,24 @@ lint.ignore = [
     "C901",  # too complex
     "N803",  # argument name should be lowercase (common in scientific code)
     "N806",  # variable in function should be lowercase (common in scientific code)
-    "PD901", # avoid generic df variable name (too strict for pipeline scripts)
+    # Inherited from v1 codebase — address incrementally
+    "A001",  # variable shadowing builtin (e.g. `all = ...`)
+    "A002",  # argument shadowing builtin
+    "A004",  # import shadowing builtin
+    "E402",  # module import not at top of file (scripts use sys.path manipulation)
+    "E721",  # type comparison (use isinstance)
+    "E722",  # bare except
+    "E741",  # ambiguous variable name
+    "F403",  # star imports
+    "F405",  # may be undefined from star import
+    "F811",  # redefinition of unused name
+    "F821",  # undefined name (often consequence of star imports)
+    "N802",  # function name should be lowercase
+    "SIM102",  # nested if statements (pervasive in inherited code)
+    "SIM108",  # ternary operator suggestion (pervasive in inherited code)
+    "SIM113",  # use enumerate() (pervasive in inherited code)
+    "B007",    # loop variable not used in loop body (inherited)
+    "B018",    # useless attribute access / expression (inherited)
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -103,3 +119,13 @@ lint.ignore = [
 testpaths = ["scripts/tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
+
+[tool.bandit]
+exclude_dirs = ["scripts/tests"]
+skips = [
+    "B101",  # assert used — standard pytest pattern
+    "B112",  # try/except/continue — intentional in data-processing loops
+    "B113",  # requests without timeout — low confidence, upstream APIs
+    "B321",  # FTP calls — upstream sources require FTP, can't replace
+    "B402",  # FTP import — upstream sources require FTP, can't replace
+]

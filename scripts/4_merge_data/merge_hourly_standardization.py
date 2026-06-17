@@ -15,11 +15,12 @@ Intended Use
 Script functions are used to standardize all variables to hourly temporal resolution as a part of the merge pipeline.
 """
 
+import inspect
+import logging
 from functools import reduce
+
 import numpy as np
 import pandas as pd
-import logging
-import inspect
 
 
 def qaqc_flag_fcn(flags: str) -> str:
@@ -229,7 +230,7 @@ def merge_hourly_standardization(
             lambda left, right: pd.merge(left, right, on=["time"], how="outer"),
             result_list,
         )
-        result.reset_index(inplace=True)  # Convert time index --> column
+        result = result.reset_index()  # Convert time index --> column
 
         # Infill constant values and flag rows added through resampling
         result = _modify_infill(result, constant_vars)

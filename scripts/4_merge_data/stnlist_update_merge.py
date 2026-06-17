@@ -6,14 +6,14 @@ updating the station list in the 1_raw_wx folder to reflect station availability
 with relevant errors added to the corresponding stations if station files do not pass merge, or if the errors occur during or after the merge process.
 
 Note that because errors.csv are parsed, very old errors.csv may want to be removed manually from AWS or thresholded below
-(removing those produced during code testing). 
+(removing those produced during code testing).
 
 Functions
 ---------
 - get_station_list: Retrieves specific network stationlist from QAQC bucket
-- get_zarr_last_mod: Identifies the last modified date from a zarr 
+- get_zarr_last_mod: Identifies the last modified date from a zarr
 - get_merge_stations: Retrieves list of all stations that pass the merge process
-- fix_start_end_dates: Fixes two kinds of incorrect date encoding listed in the network stationlists. 
+- fix_start_end_dates: Fixes two kinds of incorrect date encoding listed in the network stationlists.
 - parse_error_csv: Retrieves all processing error files for a network
 - merge_qa: Update station list and save to AWS, adding merge status, time of merge pass and any relevant errors.
 
@@ -25,15 +25,16 @@ Run this script after merge has been completed for a network (via pcluster run) 
 import os
 import sys
 from datetime import datetime
-import pandas as pd
-import xarray as xr
-from io import BytesIO, StringIO
-import numpy as np
+from io import StringIO
+
 import boto3
+import numpy as np
+import pandas as pd
 import s3fs
+import xarray as xr
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME, QAQC_WX, MERGE_WX
+from paths import BUCKET_NAME, MERGE_WX, QAQC_WX
 
 # Set environment variables
 s3 = boto3.resource("s3")
@@ -180,7 +181,7 @@ def fix_start_end_dates(network: str, stations: pd.DataFrame) -> pd.DataFrame:
                     f"s3://{BUCKET_NAME}/{MERGE_WX}/{network}/{id}.zarr",
                     consolidated=False,
                 )
-            except Exception as e:
+            except Exception:
                 continue
 
             correct_start = str(ds.time.values[0])
@@ -206,7 +207,7 @@ def fix_start_end_dates(network: str, stations: pd.DataFrame) -> pd.DataFrame:
         stations.insert(4, "start-date", start)
         stations.insert(5, "end-date", end)
     except:
-        print(f"Issue resetting index on start/end")
+        print("Issue resetting index on start/end")
 
     return stations
 
@@ -326,7 +327,7 @@ def merge_qa(network: str):
     else:
         # Add relevant ID to errors csv
         errors["ID"] = np.nan
-        errors.reset_index(inplace=True, drop=True)
+        errors = errors.reset_index(drop=True)
         errors["Time"] = pd.to_datetime(errors["Time"], format="%Y%m%d%H%M", utc=True)
 
         for index, row in errors.iterrows():
@@ -337,7 +338,7 @@ def merge_qa(network: str):
 
         # For each station
         for index, row in stations.iterrows():
-            error_sta = errors.loc[errors.ID == row["ERA-ID"]]
+            error_sta = errors.loc[row["ERA-ID"] == errors.ID]
             if error_sta.empty:
                 # if no errors for station
                 continue

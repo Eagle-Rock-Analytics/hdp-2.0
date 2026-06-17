@@ -21,21 +21,22 @@ Functions
 
 Intended Use
 ------------
-Script function utilities, as a part of the QA/QC pipeline. 
+Script function utilities, as a part of the QA/QC pipeline.
 """
 
 import os
+import sys
+import time
+
 import boto3
 import geopandas as gp
 import numpy as np
-import time
 import pandas as pd
 import scipy.stats as stats
-import sys
 from log_config import logger
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME, RAW_WX, CLEAN_WX, QAQC_WX, MERGE_WX
+from paths import CLEAN_WX, MERGE_WX, QAQC_WX, RAW_WX
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
@@ -237,9 +238,9 @@ def qaqc_dist_whole_stn_bypass_check(
     stn_length = map(
         qaqc_var_length_bypass_check, [new_df] * len(vars_to_check), vars_to_check
     )
-    stn_length = {k: v for k, v in zip(vars_to_check, stn_length)}
+    stn_length = dict(zip(vars_to_check, stn_length, strict=False))
 
-    nYears = np.array([v.max() for k, v in stn_length.items()])
+    np.array([v.max() for k, v in stn_length.items()])
 
     vars_to_flag = []
     for var in vars_to_check:
@@ -285,7 +286,7 @@ def qaqc_dist_var_bypass_check(
     df = df.copy()
 
     # if all values are null for that month across years
-    if df[var].isnull().all() == True:
+    if df[var].isnull().all():
         df[var + "_eraqc"] = 20  # see era_qaqc_flag_meanings.csv
 
     # if more than min_num_months have invalid obs
@@ -353,7 +354,7 @@ def grab_valid_obs(
     """
 
     # grab obs with no flags
-    df_noflags = df.loc[df[var + "_eraqc"].isnull() == True]
+    df_noflags = df.loc[df[var + "_eraqc"].isnull()]
 
     # retains yellow flagged obs for QA/QC checks where distribution not assessed
     if kind == "keep":
@@ -369,10 +370,9 @@ def grab_valid_obs(
         df_valid = df_noflags
 
     # only applies to some logic checks
-    if var2 != None:
+    if var2 is not None:
         df_valid = df.loc[
-            (df[var + "_eraqc"].isnull() == True)
-            & (df[var2 + "_eraqc"].isnull() == True)
+            (df[var + "_eraqc"].isnull()) & (df[var2 + "_eraqc"].isnull())
         ]
 
     return df_valid

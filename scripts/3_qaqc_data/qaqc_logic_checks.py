@@ -1,7 +1,7 @@
 """
 qaqc_logic_checks.py
 
-This is a script where Stage 3: QA/QC function(s) on logic checks in the data observations are flagged. 
+This is a script where Stage 3: QA/QC function(s) on logic checks in the data observations are flagged.
 For use within the PIR-19-006 Historical Obsevations Platform.
 
 Functions
@@ -15,13 +15,13 @@ Functions
 
 Intended Use
 ------------
-Script functions assess QA/QC on meteorological logic checks for physical consistency, as a part of the QA/QC pipeline. 
+Script functions assess QA/QC on meteorological logic checks for physical consistency, as a part of the QA/QC pipeline.
 """
 
 import datetime
+
 import pandas as pd
 from log_config import logger
-
 from qaqc_utils import grab_valid_obs
 
 
@@ -354,7 +354,6 @@ def qaqc_crossvar_logic_calm_wind_dir(df: pd.DataFrame) -> pd.DataFrame:
             (df_valid["sfcWind"] == 0)
             & (df_valid["sfcWind_dir"] != 0)
             & ~(df_valid["sfcWind_dir"]).isnull()
-            == True
         ]
         df.loc[isBad.index, "sfcWind_dir_eraqc"] = 14  # see qaqc_flag_meanings.csv
 
@@ -401,12 +400,11 @@ def qaqc_pressure_units_fix(df: pd.DataFrame) -> pd.DataFrame:
 
     for var in ps_vars:
         try:
-            if var in df.columns:
-                if df[var].mean() < 10000:
-                    df[var] = df[var] * 100.0
-                    logger.info(
-                        f"Pressure units on {var} updated to be Pa",
-                    )
+            if var in df.columns and df[var].mean() < 10000:
+                df[var] = df[var] * 100.0
+                logger.info(
+                    f"Pressure units on {var} updated to be Pa",
+                )
         except Exception as e:
             logger.error("qaqc_pressure_units_fix failed")
             raise e

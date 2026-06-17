@@ -9,8 +9,8 @@ Functions
 
 Intended Use
 ------------
-Script is intended to be used CAREFULLY and on a rare as-needed basis. 
-User is forced to input specific network and Y/N answer in order to proceed. 
+Script is intended to be used CAREFULLY and on a rare as-needed basis.
+User is forced to input specific network and Y/N answer in order to proceed.
 Options:
     - which_to_delete = "empty"
         When grabbing data for an updated pull from Synoptic/MADIS networks for end of 2022 data,
@@ -36,12 +36,12 @@ Options:
 
     - which_to_delete = "no_wx_data"
         Some networks (e.g., NDBC, MARITIME, ASOSAWOS) do not have any valid meteorological variables
-        and should not proceed through cleaning. 
+        and should not proceed through cleaning.
 """
 
+import boto3
 import pandas as pd
 import s3fs
-import boto3
 from clean_utils import get_file_paths
 
 s3 = boto3.resource("s3")

@@ -22,30 +22,26 @@ Intended Use
 Cleaned data for an individual network, priority variables, all times. Organized by station as .nc file.
 """
 
+import gzip
 import os
-import xarray as xr
+import zipfile
 from datetime import datetime
+from io import BytesIO, StringIO
+
+import boto3
+import calc_clean
 import numpy as np
 import pandas as pd
-import boto3
-from io import BytesIO, StringIO
-import gzip
 import requests
 from bs4 import BeautifulSoup
-import zipfile
-
 from clean_utils import get_file_paths
-import calc_clean
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
 BUCKET_NAME = "wecc-historical-wx"
 
 ## Set up directory to save files temporarily, if it doesn't already exist.
-try:
-    os.mkdir("temp")
-except:
-    pass
+os.makedirs("temp", exist_ok=True)
 
 
 def get_elevs(url: str) -> pd.DataFrame:
@@ -223,14 +219,14 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                             ) as file_to_parse:
                                 df = pd.read_csv(
                                     file_to_parse,
-                                    sep="\s+",
+                                    sep=r"\s+",
                                     low_memory=False,
                                     na_values="MM",
                                 )
 
                                 # older files are missing the minute column
                                 # manually setting to top of hour, our process will collapse all other obs to top of hour at next stage
-                                if {"mm"}.issubset(df.columns) == False:
+                                if not {"mm"}.issubset(df.columns):
                                     df.insert(loc=4, column="mm", value="00")
 
                                 # fix year label mismatch
@@ -247,21 +243,20 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                                         df["YYYY"] = df["YY"].apply(lambda x: f"20{x}")
                                         df = df.iloc[:, 1:]
 
-                                if (df.columns[0][0].isdigit()) == False:
+                                if not (df.columns[0][0].isdigit()):
                                     # newer files have a 2-line header with comments
-                                    df.drop([0], inplace=True)
-                                    df.rename(columns={"#YY": "YYYY"}, inplace=True)
+                                    df = df.drop([0])
+                                    df = df.rename(columns={"#YY": "YYYY"})
 
                                 # fix variable label mismatch
-                                if {"WD", "BAR"}.issubset(df.columns) == True:
+                                if {"WD", "BAR"}.issubset(df.columns):
                                     # older files have different var names
-                                    df.rename(
+                                    df = df.rename(
                                         columns={"WD": "WDIR", "BAR": "PRES"},
-                                        inplace=True,
                                     )
 
                                 # convert date to datetime
-                                df.rename(
+                                df = df.rename(
                                     columns={
                                         "YYYY": "year",
                                         "MM": "month",
@@ -269,7 +264,6 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                                         "hh": "hour",
                                         "mm": "minute",
                                     },
-                                    inplace=True,
                                 )
                                 df["time"] = pd.to_datetime(
                                     df[["year", "month", "day", "hour", "minute"]],
@@ -299,7 +293,7 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                                 ]
                                 # drop all columns not in cols_to_keep list
                                 df = df[df.columns.intersection(cols_to_keep)]
-                                df.rename(
+                                df = df.rename(
                                     columns={
                                         "WDIR": "sfcWind_dir",
                                         "WSPD": "sfcWind",
@@ -307,7 +301,6 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                                         "ATMP": "tas",
                                         "DEWP": "tdps",
                                     },
-                                    inplace=True,
                                 )
 
                                 df["sfcWind_dir"] = pd.to_numeric(df["sfcWind_dir"])
@@ -319,13 +312,13 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                                 # standardize NA codes
                                 try:
                                     # sfcWind_dir
-                                    df.replace(999, np.nan, inplace=True)
+                                    df = df.replace(999, np.nan)
                                     # sfcWind_dir, tas, tdps
-                                    df.replace(999.0, np.nan, inplace=True)
+                                    df = df.replace(999.0, np.nan)
                                     # sfcWind
-                                    df.replace(99.0, np.nan, inplace=True)
+                                    df = df.replace(99.0, np.nan)
                                     # ps
-                                    df.replace(9999.0, np.nan, inplace=True)
+                                    df = df.replace(9999.0, np.nan)
 
                                 except Exception as e:
                                     print(e)
@@ -397,7 +390,7 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                                                 df.columns.intersection(cols_to_keep)
                                             ]
 
-                                            df.rename(
+                                            df = df.rename(
                                                 columns={
                                                     "LATITUDE": "lat",
                                                     "LONGITUDE": "lon",
@@ -408,18 +401,17 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                                                     "Q_FLAG": "q_code",
                                                     "time": "time",
                                                 },
-                                                inplace=True,
                                             )
 
                                             # missing data flags - mainly as a catchall in case pre-proccessed data did not catch
                                             # sfcWind_dir
-                                            df.replace(999, np.nan, inplace=True)
+                                            df = df.replace(999, np.nan)
                                             # sfcWind_dir, tas, tdps
-                                            df.replace(999.0, np.nan, inplace=True)
+                                            df = df.replace(999.0, np.nan)
                                             # sfcWind
-                                            df.replace(99.0, np.nan, inplace=True)
+                                            df = df.replace(99.0, np.nan)
                                             # ps
-                                            df.replace(9999.0, np.nan, inplace=True)
+                                            df = df.replace(9999.0, np.nan)
 
                                             # if more than one file per station, merge files together
                                             if df_stat is None:
@@ -633,7 +625,7 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
 
                 # update/add variable attributes and do unit conversions
                 # tas: surface air temperature (K)
-                if "tas" in ds.keys():
+                if "tas" in ds:
                     ds["tas"] = calc_clean._unit_degC_to_K(ds["tas"])
                     ds["tas"].attrs["long_name"] = "air_temperature"
                     ds["tas"].attrs["standard_name"] = "air_temperature"
@@ -641,7 +633,7 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                     ds["tas"].attrs["comment"] = "Converted from degC to K"
 
                 # ps: surface air pressure (Pa)
-                if "ps" in ds.keys():
+                if "ps" in ds:
                     ds["ps"] = calc_clean._unit_pres_hpa_to_pa(ds["ps"])
                     ds["ps"].attrs["long_name"] = "station_air_pressure"
                     ds["ps"].attrs["standard_name"] = "air_pressure"
@@ -649,7 +641,7 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                     ds["ps"].attrs["comment"] = "Converted from hPa to Pa"
 
                 # tdps: dew point temperature (K)
-                if "tdps" in ds.keys():
+                if "tdps" in ds:
                     ds["tdps"] = calc_clean._unit_degC_to_K(ds["tdps"])
                     ds["tdps"].attrs["long_name"] = "dew_point_temperature"
                     ds["tdps"].attrs["standard_name"] = "dew_point_temperature"
@@ -667,26 +659,26 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                 # Note: not measured by NDBC or MARITIME
 
                 # sfcWind: surface wind speed (m/s)
-                if "sfcWind" in ds.keys():
+                if "sfcWind" in ds:
                     ds["sfcWind"].attrs["long_name"] = "wind_speed"
                     ds["sfcWind"].attrs["standard_name"] = "wind_speed"
                     ds["sfcWind"].attrs["units"] = "m s-1"
 
                 # sfcWind_dir: wind direction (degrees)
-                if "sfcWind_dir" in ds.keys():
+                if "sfcWind_dir" in ds:
                     ds["sfcWind_dir"].attrs["long_name"] = "wind_direction"
                     ds["sfcWind_dir"].attrs["standard_name"] = "wind_from_direction"
                     ds["sfcWind_dir"].attrs["units"] = "degrees_clockwise_from_north"
 
                 # q_code: quality code flag in Canadian-data ONLY
                 # note this flag appears that it applies to every observation at that time stamp - waiting on confirmation
-                if "q_code" in ds.keys():
+                if "q_code" in ds:
                     ds["q_code"].attrs["code_values"] = "0 1 3 4 5 6 7 8 9"
                     ds["q_code"].attrs["flag_meanings"] = "See QA/QC csv for network."
 
                 # drop any column that does not have any valid (non-nan data)
                 # need to keep elevation separate, as it does have "valid" nan value, only drop if all other variables are also nans
-                for key in ds.keys():
+                for key in ds:
                     try:
                         if key != "elevation":
                             if np.isnan(ds[key].values).all():
@@ -700,12 +692,12 @@ def clean_buoys(rawdir: str, cleandir: str, network: str):
                             # slightly unnecessary since the entire dataset will be empty too
                             ds = ds.drop(key)
                             continue
-                    except Exception as e:
+                    except Exception:
                         # Add to handle errors for unsupported data types
                         continue
 
                 # removes elevation and quality code (canadian buoy only) if the only remaining variables (occurs at least once)
-                for key in ds.keys():
+                for key in ds:
                     if "q_code" in list(ds.keys()):
                         if len(ds.keys()) == 2:
                             print("Dropping empty var: elevation")

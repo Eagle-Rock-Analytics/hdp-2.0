@@ -8,7 +8,7 @@
 #   Each SLURM array task processes a single station using the script:
 #       ../3_qaqc_data/QAQC_run_for_single_station.py
 #
-#   This is an embarrassingly parallel workload: 
+#   This is an embarrassingly parallel workload:
 #   - Each task is independent and processes one station
 #   - Tasks require no communication or coordination
 #   - Ideal for SLURM array jobs and horizontal scaling
@@ -73,7 +73,7 @@ log_file="$NEW_OUT"
   echo "====================================="
   echo "Station: $STATION"
   echo "Job Name: $SLURM_JOB_NAME"
-  echo "Array Job ID: $SLURM_ARRAY_JOB_ID" 
+  echo "Array Job ID: $SLURM_ARRAY_JOB_ID"
   echo "Task ID: $SLURM_ARRAY_TASK_ID"
   echo "Partition: $SLURM_JOB_PARTITION"
   echo "Number of Nodes: $SLURM_JOB_NUM_NODES"

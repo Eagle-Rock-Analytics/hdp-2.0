@@ -6,12 +6,12 @@ updating the station list in the 1_raw_wx folder to reflect station availability
 with relevant errors added to the corresponding stations if station files do not pass QA/QC, or if the errors occur during or after the QA/QC process.
 
 Note that because errors.csv are parsed, very old errors.csv may want to be removed manually from AWS or thresholded below
-(removing those produced during code testing). 
+(removing those produced during code testing).
 
 Functions
 ---------
 - get_station_list: Retrieves specific network stationlist from clean bucket
-- get_zarr_last_mod: Identifies the last modified date from a zarr 
+- get_zarr_last_mod: Identifies the last modified date from a zarr
 - get_qaqc_stations: Retrieves list of all stations that pass QAQC
 - parse_error_csv: Retrieves all processing error files for a network
 - qaqc_qa: Processing function that updates the stationlist with QA/QC status
@@ -24,14 +24,15 @@ Run this script after QAQC has been completed for a network (via pcluster run) t
 import os
 import sys
 from datetime import datetime
-import pandas as pd
-from io import BytesIO, StringIO
-import numpy as np
+from io import StringIO
+
 import boto3
+import numpy as np
+import pandas as pd
 import s3fs
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME, RAW_WX, CLEAN_WX, QAQC_WX
+from paths import BUCKET_NAME, CLEAN_WX, QAQC_WX
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")
@@ -257,7 +258,7 @@ def qaqc_qa(network: str):
     else:
         # Add relevant ID to errors csv
         errors["ID"] = np.nan
-        errors.reset_index(inplace=True, drop=True)
+        errors = errors.reset_index(drop=True)
         errors["Time"] = pd.to_datetime(errors["Time"], format="%Y%m%d%H%M", utc=True)
 
         for index, row in errors.iterrows():
@@ -267,7 +268,7 @@ def qaqc_qa(network: str):
                 errors.loc[index, "ID"] = network + "_" + id[-1]
 
         for index, row in stations.iterrows():  # For each station
-            error_sta = errors.loc[errors.ID == row["ERA-ID"]]
+            error_sta = errors.loc[row["ERA-ID"] == errors.ID]
             if error_sta.empty:  # if no errors for station
                 continue
             else:

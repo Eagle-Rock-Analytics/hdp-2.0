@@ -13,16 +13,14 @@ Functions
 
 Intended Use
 ------------
-Script functions assess QA/QC on accumulated precipitation, as a part of the QA/QC pipeline. 
+Script functions assess QA/QC on accumulated precipitation, as a part of the QA/QC pipeline.
 """
 
 import numpy as np
 import pandas as pd
-import scipy.stats as stats
 from log_config import logger
-
-from qaqc_utils import *
 from qaqc_plot import *
+from qaqc_utils import *
 
 
 def is_precip_accumulated(pr: pd.Series) -> bool:
@@ -65,10 +63,7 @@ def is_precip_accumulated(pr: pd.Series) -> bool:
     if np.isnan(autocorr):
         return False
     else:
-        if np.nanmean(autocorr) > 0.8:
-            return True
-        else:
-            return False
+        return np.nanmean(autocorr) > 0.8
 
 
 def flag_ringing(
@@ -209,8 +204,8 @@ def de_accumulate(
     # values would have a negative large value (the value of the previous large value
     # minus zero), but this should be replaced by zero
     clean_diff_series[resets] = np.nan
-    clean_diff_series.fillna(
-        0, inplace=True
+    clean_diff_series = clean_diff_series.fillna(
+        0
     )  # Replace NaNs with zero (or use interpolation if needed)
 
     # Re-flag negative differences
@@ -295,7 +290,6 @@ def qaqc_deaccumulate_precip(
     >>> df[['pr', 'accum_pr', 'accum_pr_eraqc']]
 
     """
-    vars_for_deacummulation = ["pr"]
     # identify which precipitation vars are reported by a station
     vars_to_remove = ["qc", "duration", "method", "depth", "accum"]
     all_pr_vars = [
@@ -340,7 +334,7 @@ def qaqc_deaccumulate_precip(
 
                     # Save original accumulated precip into new variable, and de-accumulated into original pr
                     # and save de-accumulated precip into original pr
-                    tmp_var, tmp_index = df[var].values, df[var].index
+                    tmp_var, _tmp_index = df[var].values, df[var].index
 
                     # I wonder if this is neccessary, in my opinion it is
                     # We should flag those oscillating/ringing values in the de-accumulated

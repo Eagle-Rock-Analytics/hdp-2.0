@@ -17,24 +17,23 @@ Retrieves raw data for an individual network, all variables, all times. Organize
 
 Notes
 -----
-1. The file for each station-year is updated daily for the current year. 
-To pull real-time data, we may want to write just an API call with date ranges and stations and update the most recent year folder only. 
+1. The file for each station-year is updated daily for the current year.
+To pull real-time data, we may want to write just an API call with date ranges and stations and update the most recent year folder only.
 This is a separate function/branch.
 2. This function assumes users have configured the AWS CLI such that their access key / secret key pair are stored in ~/.aws/credentials.
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
-from ftplib import FTP
 from datetime import datetime, timezone
-import pandas as pd
-from shapely.geometry import Point
-import pandas as pd
-import geopandas as gp
-from geopandas.tools import sjoin
-import boto3  # For AWS integration.
+from ftplib import FTP
 from io import BytesIO, StringIO
 
+import boto3  # For AWS integration.
+import geopandas as gp
+import pandas as pd
 from calc_pull import ftp_to_aws, get_wecc_poly
+from geopandas.tools import sjoin
+from shapely.geometry import Point
 
 s3 = boto3.client("s3")
 BUCKET_NAME = "wecc-historical-wx"
@@ -80,7 +79,9 @@ def get_wecc_stations(terrpath: str, marpath: str, directory: str) -> pd.DataFra
     weccstations = stations[(stations["CTRY"] == "US")]
 
     # Use spatial geometry to only keep points in wecc marine / terrestrial areas
-    geometry = [Point(xy) for xy in zip(weccstations["LON"], weccstations["LAT"])]
+    geometry = [
+        Point(xy) for xy in zip(weccstations["LON"], weccstations["LAT"], strict=False)
+    ]
     weccgeo = gp.GeoDataFrame(weccstations, crs="EPSG:4326", geometry=geometry)
     # get bbox of WECC to use to filter stations against
     t, m, bbox = get_wecc_poly(terrpath, marpath)
@@ -127,7 +128,7 @@ def get_wecc_stations(terrpath: str, marpath: str, directory: str) -> pd.DataFra
     # create mask and filter
     m1 = weccstations.WBAN.isin(asosawos.WBAN)
     weccstations = weccstations[~m1]
-    weccstations.reset_index(inplace=True, drop=True)
+    weccstations = weccstations.reset_index(drop=True)
 
     # Write non-ASOS AWOS station list to CSV
     csv_buffer = StringIO()
@@ -189,7 +190,7 @@ def get_otherisd_data_ftp(
             # Filter to ensure station is not depracated before time period of interest
             station_list = station_list[station_list["end_time"] >= start_date]
         except Exception as e:
-            print(f"Error:", {e})
+            print("Error:", {e})
             # function will use years to filter station files
             years = [i for i in years if (len(i) < 5 and int(i) > 1979)]
 

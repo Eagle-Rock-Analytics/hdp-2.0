@@ -11,7 +11,7 @@ dist/
 build/
 *.egg-info/
 
-# pycache 
+# pycache
 */__pycache/*
 *.pyc
 
@@ -24,8 +24,8 @@ build/
 .local/
 .virtual_environments/
 
-# Data 
-*.nc 
+# Data
+*.nc
 */*.nc
 
 # Logging

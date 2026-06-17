@@ -31,6 +31,7 @@ python QAQC_run_for_single_station.py --station="CW3E_HDC"
 """
 
 import argparse
+
 from QAQC_pipeline import run_qaqc_one_station
 
 
@@ -50,8 +51,8 @@ def main():
     # Create argument parser
     parser = argparse.ArgumentParser(
         prog="QAQC_run_for_single_station",  # Program name
-        description="""This script applies quality assurance and quality control (QA/QC) protocols to cleaned weather 
-                       station data for ingestion into the Historical Observations Platform (HOP). It is designed to be 
+        description="""This script applies quality assurance and quality control (QA/QC) protocols to cleaned weather
+                       station data for ingestion into the Historical Observations Platform (HOP). It is designed to be
                        network-independent, capable of processing data for individual stations across various networks.""",
     )
 

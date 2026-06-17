@@ -15,7 +15,7 @@ Functions
 - frequent_precip_plot: Plot frequent values for precipitation.
 - dist_gap_part1_plot: Produces a timeseries plots of specific months and variables for part 1 of the unusual gaps function.
 - dist_gap_part2_plot: Produces a histogram of the monthly standardized distribution with PDF overlay and threshold lines where pdf falls below y=0.1.
-- unusual_jumps_plot: Plots unusual large jumps qaqc. 
+- unusual_jumps_plot: Plots unusual large jumps qaqc.
 - clim_outlier_plot: Produces a histogram of monthly standardized distribution with PDF overlay and threshold lines where pdf falls below y=0.1.
 - climatological_precip_plot: Plot frequent values for precipitation.
 - unusual_streaks_plot: Plots unusual streaks qaqc data points.
@@ -26,24 +26,22 @@ Functions
 
 Intended Use
 ------------
-Script functions produce QA/QC figures, as a part of the QA/QC pipeline. 
+Script functions produce QA/QC figures, as a part of the QA/QC pipeline.
 """
 
+import math
 import os
 import sys
+from io import BytesIO
+
 import boto3
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import math
-import matplotlib.pyplot as plt
-from io import BytesIO
 import scipy.stats as stats
 from log_config import logger
-import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME, QAQC_WX
-
 # =======================================================================================================
 # IGNORE PERFORMANCE WARNING FOR NOW
 # Related to:
@@ -53,10 +51,11 @@ from paths import BUCKET_NAME, QAQC_WX
 # it's not a big deal. Check for V2 if ordering de multiindex would preserve order for final/original df
 import warnings
 
+from paths import BUCKET_NAME, QAQC_WX
+
 warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
-from qaqc_utils import create_bins_frequent, create_bins
-from IPython.display import display
+from qaqc_utils import create_bins, create_bins_frequent
 
 s3 = boto3.resource("s3")
 BUCKET = s3.Bucket(BUCKET_NAME)
@@ -114,11 +113,7 @@ def _plot_format_helper(var: str) -> tuple[str, str, float, float]:
         ylab = "Surface Radiation"
         unit = "$W m^{-2}$"
 
-    elif var == "hurs" or "hurs_derived":
-        ylab = "Humidity"
-        unit = "%"
-
-    elif var == "hurs_derived":  # added in hurs_derived
+    elif True:
         ylab = "Humidity"
         unit = "%"
 
@@ -310,7 +305,7 @@ def flagged_timeseries_plot(
                 label=flag_label,
             )
 
-            legend = ax.legend(loc=0, prop={"size": 8})
+            ax.legend(loc=0, prop={"size": 8})
 
         # plot aesthetics
         ylab, units, miny, maxy = _plot_format_helper(var)
@@ -390,7 +385,7 @@ def frequent_plot_helper(
 
     bars_to_flag = []
     for i in vals_to_flag:
-        if math.isnan(i) == False:
+        if not math.isnan(i):
             bars_to_flag.append(math.floor(i))
 
     # flag bars if too frequent
@@ -826,7 +821,7 @@ def dist_gap_part2_plot(
     mu = np.nanmean(df_month_iqr)
     sigma = np.nanstd(df_month_iqr)
     y = stats.norm.pdf(bins, mu, sigma)
-    l = plt.plot(bins, y, "k--", linewidth=1)
+    plt.plot(bins, y, "k--", linewidth=1)
 
     # add vertical lines to indicate thresholds where pdf y=0.1
     try:
@@ -844,9 +839,7 @@ def dist_gap_part2_plot(
             # flag (visually) obs that are beyond threshold
             for bar in ax[2].patches:
                 x = bar.get_x() + 0.5 * bar.get_width()
-                if x > thresholds[1]:  # right tail
-                    bar.set_color("r")
-                elif x < thresholds[0]:  # left tail
+                if x > thresholds[1] or x < thresholds[0]:  # right tail
                     bar.set_color("r")
     except:
         logger.info(
@@ -934,14 +927,14 @@ def unusual_jumps_plot(df: pd.DataFrame, var: str, flagval: int = 23, dpi: int =
 
     # plot other flags
     other_flags = np.logical_and(
-        ~df[var + "_eraqc"].isnull() == True, df[var + "_eraqc"] != flagval
+        ~df[var + "_eraqc"].isnull(), df[var + "_eraqc"] != flagval
     )
     if other_flags.any():
         df.loc[other_flags, var].plot(
             ax=ax, marker="o", ms=7, lw=0, mfc="none", color="C4", label="other flags"
         )
 
-    legend = ax.legend(loc=0, prop={"size": 8})
+    ax.legend(loc=0, prop={"size": 8})
 
     # Plot aesthetics
     ylab, units, miny, maxy = _plot_format_helper(var)
@@ -1044,9 +1037,7 @@ def clim_outlier_plot(
 
     # Plot the histogram of the series
     fig, ax = plt.subplots()
-    ax.stairs(
-        freq, bins, alpha=1, color="C3", label="Clim outliers".format(month, hour)
-    )
+    ax.stairs(freq, bins, alpha=1, color="C3", label="Clim outliers")
 
     ax.stairs(
         freq[good_freq],
@@ -1068,7 +1059,7 @@ def clim_outlier_plot(
     ax.axhline(0.1, c="k", ls=":", alpha=0.8)
 
     # title and useful annotations
-    box = dict(facecolor="white", edgecolor="white", alpha=0.85)
+    box = {"facecolor": "white", "edgecolor": "white", "alpha": 0.85}
     plt.title(
         f"Climatological outlier check, {station}: {var}",
         fontsize=10,
@@ -1295,7 +1286,7 @@ def unusual_streaks_plot(
             label=flag_label_2,
         )
 
-    legend = ax.legend(loc=0, prop={"size": 8})
+    ax.legend(loc=0, prop={"size": 8})
 
     # Plot aesthetics
     ylab, units, miny, maxy = _plot_format_helper(var)
@@ -1441,7 +1432,7 @@ def precip_deaccumulation_plot(
     for ax in (ax0, ax1):
         ax.set_ylabel(ylab)
         ax.set_xlabel("")
-        legend = ax.legend(loc=0, prop={"size": 8})
+        ax.legend(loc=0, prop={"size": 8})
 
     # save to AWS
     img_data = BytesIO()

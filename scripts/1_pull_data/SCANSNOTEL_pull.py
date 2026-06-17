@@ -20,16 +20,15 @@ Notes
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
-import pandas as pd
 from datetime import datetime
-import numpy as np
-import boto3
 from io import StringIO
+
+import boto3
+import numpy as np
+import pandas as pd
+from calc_pull import get_wecc_poly
 from zeep import Client  # For calling SOAP APIs
 from zeep.helpers import serialize_object
-
-from calc_pull import get_wecc_poly
-
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
@@ -125,7 +124,7 @@ def get_scan_station_data(
     end_date: str | None = None,
     stations: pd.Series | None = None,
     primary: bool = False,
-    networks: list[str] | None = ["SNTL", "SCAN"],
+    networks: list[str] | None = None,
     fileext: str | None = None,
 ):
     """Download USDA station data using SOAP API. Data is organized by station, by sensor.
@@ -155,6 +154,8 @@ def get_scan_station_data(
     """
 
     # Set end time to be current time at beginning of download
+    if networks is None:
+        networks = ["SNTL", "SCAN"]
     end_api = datetime.now().strftime("%Y%m%d%H%M")
 
     # Specify default networks

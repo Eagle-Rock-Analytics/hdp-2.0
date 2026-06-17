@@ -26,30 +26,27 @@ QAQC flags and removed variable lists both formatted and uploaded manually. Last
 """
 
 import os
-import xarray as xr
-from datetime import datetime, date, timedelta
 import re
+import warnings
+from datetime import datetime
+from io import BytesIO, StringIO
+
+import boto3
 import numpy as np
 import pandas as pd
-import boto3
-from io import BytesIO, StringIO
-import warnings
 
 # Optional: Silence pandas' future warnings about regex (not relevant here)
 warnings.filterwarnings(action="ignore", category=FutureWarning)
 
-from clean_utils import get_file_paths
 import calc_clean
+from clean_utils import get_file_paths
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
 BUCKET_NAME = "wecc-historical-wx"
 
 # Set up directory to save files temporarily, if it doesn't already exist.
-try:
-    os.mkdir("temp")
-except:
-    pass
+os.makedirs("temp", exist_ok=True)
 
 
 def clean_scansnotel(rawdir: str, cleandir: str):
@@ -116,7 +113,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
         )
 
         # Get list of station IDs from filename and clean.
-        ids = list()
+        ids = []
         for file in files:
             id = file.split("/")[-1]
             # Remove leading prefixes (for mult files)
@@ -164,7 +161,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                         df = pd.read_csv(BytesIO(obj["Body"].read()), low_memory=False)
 
                         # Fix any NA mixed types
-                        df.replace("NaN", np.nan, inplace=True)
+                        df = df.replace("NaN", np.nan)
 
                         # Drop any columns that only contain NAs.
                         df = df.dropna(axis=1, how="all")
@@ -189,9 +186,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
 
                         if len([col for col in df.columns if "time" in col]) > 1:
                             # If more than one time column remains,
-                            time_list = list(
-                                [col for col in df.columns if "time" in col]
-                            )
+                            time_list = [col for col in df.columns if "time" in col]
                             print(f"Conflicting time values: {time_list}")
                             exit()
 
@@ -236,7 +231,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                 # Fix multi-type columns
                 # If column has QC in it, force to string.
                 for b in df_stat.columns:
-                    multitype = set(type(x).__name__ for x in df_stat[b])
+                    multitype = {type(x).__name__ for x in df_stat[b]}
                     if len(multitype) > 1:
                         if "flag" in b:
                             # QC columns, Coerce to string (to handle multiple QA/QC flags)
@@ -260,7 +255,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                             df_stat[b] = df_stat[b].astype(str)
 
                 # Fix issue with "nan" and nan causing comparison errors
-                df_stat.replace("nan", np.nan, inplace=True)
+                df_stat = df_stat.replace("nan", np.nan)
 
                 # Sort by time and remove any overlapping timestamps.
                 df_stat = df_stat.sort_values(by="time")
@@ -391,7 +386,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                 # Update variable attributes and do unit conversions
 
                 # tas: air surface temperature (K)
-                if "TOBS_value" in ds.keys():
+                if "TOBS_value" in ds:
                     ds["tas"] = calc_clean._unit_degF_to_K(ds["TOBS_value"])
                     ds = ds.drop("TOBS_value")
 
@@ -399,7 +394,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ds["tas"].attrs["standard_name"] = "air_temperature"
                     ds["tas"].attrs["units"] = "degree_Kelvin"
 
-                    if "TOBS_flag" in ds.keys():
+                    if "TOBS_flag" in ds:
                         # Flag values are listed in this column and separated with ; when more than one is used for a given observation.
                         ds = ds.rename({"TOBS_flag": "tas_qc"})
                         ds["tas_qc"].attrs["flag_values"] = "V S E"
@@ -411,7 +406,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
 
                 # ps: surface air pressure (Pa)
                 # Here we only have barometric pressure (sea-level).
-                if "PRES_value" in ds.keys():
+                if "PRES_value" in ds:
                     # If barometric pressure available
                     # Convert from inHg to PA
                     ds["psl"] = calc_clean._unit_pres_inHg_to_pa(ds["PRES_value"])
@@ -422,7 +417,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ds["psl"].attrs["standard_name"] = "air_pressure"
                     ds["psl"].attrs["units"] = "Pa"
 
-                    if "PRES_flag" in ds.keys():
+                    if "PRES_flag" in ds:
                         # If QA/QC exists
                         # this was previously set to TOBS_flag and tas_qc, in case this errors in the future
                         ds = ds.rename({"PRES_flag": "psl_qc"})
@@ -435,7 +430,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
 
                 # tdps: dew point temperature (K)
                 # if raw dew point temperature observed, use that.
-                if "DPTP_value" in ds.keys():
+                if "DPTP_value" in ds:
                     ds["tdps"] = calc_clean._unit_degF_to_K(ds["DPTP_value"])
                     ds = ds.drop("DPTP_value")
 
@@ -444,7 +439,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ds["tdps"].attrs["standard_name"] = "dew_point_temperature"
                     ds["tdps"].attrs["units"] = "degree_Kelvin"
 
-                    if "DPTP_flag" in ds.keys():
+                    if "DPTP_flag" in ds:
                         # If QA/QC exists.
                         ds = ds.rename({"DPTP_flag": "tdps_qc"})
                         ds["tdps_qc"].attrs["flag_values"] = "V S E"
@@ -463,13 +458,13 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                 # At this stage, no infilling. So we will keep all columns and simply rename them.
 
                 # Precipitation accumulation
-                if "PREC_value" in ds.keys():
+                if "PREC_value" in ds:
                     ds["pr"] = calc_clean._unit_precip_in_to_mm(ds["PREC_value"])
                     ds = ds.drop("PREC_value")
                     ds["pr"].attrs["long_name"] = "precipitation_accumulation"
                     ds["pr"].attrs["units"] = "mm/?"
 
-                    if "PREC_flag" in ds.keys():
+                    if "PREC_flag" in ds:
                         # If QA/QC exists.
                         ds = ds.rename({"PREC_flag": "pr_qc"})
                         ds["pr_qc"].attrs["flag_values"] = "V S E"
@@ -482,13 +477,13 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ] = "Accumulated precipitation. Converted from inches to mm."
 
                 # Precipitation increment
-                if "PRCP_value" in ds.keys():
+                if "PRCP_value" in ds:
                     ds["pr_inc"] = calc_clean._unit_precip_in_to_mm(ds["PRCP_value"])
                     ds = ds.drop("PRCP_value")
                     ds["pr_inc"].attrs["long_name"] = "precipitation_increment"
                     ds["pr_inc"].attrs["units"] = "mm/?"
 
-                    if "PRCP_flag" in ds.keys():
+                    if "PRCP_flag" in ds:
                         # If QA/QC exists.
                         ds = ds.rename({"PRCP_flag": "pr_inc_qc"})
                         ds["pr_inc_qc"].attrs["flag_values"] = "V S E"
@@ -500,7 +495,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                         "comment"
                     ] = "Precipitation increment. Converted from inches to mm."
 
-                if "PRCPSA_value" in ds.keys():
+                if "PRCPSA_value" in ds:
                     ds["pr_incsa"] = calc_clean._unit_precip_in_to_mm(
                         ds["PRCPSA_value"]
                     )
@@ -510,7 +505,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ] = "precipitation_increment_snow_adjusted"
                     ds["pr_incsa"].attrs["units"] = "mm/?"
 
-                    if "PRCPSA_flag" in ds.keys():
+                    if "PRCPSA_flag" in ds:
                         # If QA/QC exists.
                         ds = ds.rename({"PRCPSA_flag": "pr_incsa_qc"})
                         ds["pr_incsa_qc"].attrs["flag_values"] = "V S E"
@@ -525,7 +520,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ] = "Precipitation increment (snow-adjusted). Converted from inches to mm."
 
                 # hurs: relative humidity (%)
-                if "RHUM_value" in ds.keys():
+                if "RHUM_value" in ds:
                     # Already in %, no need to convert units.
                     ds = ds.rename({"RHUM_value": "hurs"})
                     # Set attributes
@@ -534,7 +529,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ds["hurs"].attrs["units"] = "percent"
 
                 # bumping out of the RH loop -- one SNOTEL station does not have rh, but does have QC flag
-                if "RHUM_flag" in ds.keys():
+                if "RHUM_flag" in ds:
                     ds = ds.rename({"RHUM_flag": "hurs_qc"})
                     ds["hurs_qc"].attrs["flag_values"] = "V S E"
                     ds["hurs_qc"].attrs["flag_meanings"] = "valid suspect edited"
@@ -542,11 +537,11 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     # including within QC loop -- one SNOTEL station does not have rh, but does have QC flag
                     # only update this info if rh variable is also present
                     # List other variables associated with variable (QA/QC)
-                    if "hurs" in ds.keys():
+                    if "hurs" in ds:
                         ds["hurs"].attrs["ancillary_variables"] = "hurs_qc"
 
                 # rsds: surface_downwelling_shortwave_flux_in_air (solar radiation, w/m2)
-                if "SRAD_value" in ds.keys():
+                if "SRAD_value" in ds:
                     # Already in w/m2, no need to convert units.
                     # If column exists, rename.
                     ds = ds.rename({"SRAD_value": "rsds"})
@@ -559,7 +554,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ds["rsds"].attrs["units"] = "W m-2"
 
                     # rsds: QA/QC flags
-                    if "SRAD_flag" in ds.keys():
+                    if "SRAD_flag" in ds:
                         ds = ds.rename({"SRAD_flag": "rsds_qc"})
                         ds["rsds_qc"].attrs["flag_values"] = "V S E"
                         ds["rsds_qc"].attrs["flag_meanings"] = "valid suspect edited"
@@ -567,7 +562,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                         ds["rsds"].attrs["ancillary_variables"] = "rsds_qc"
 
                 # sfcWind : wind speed (m/s)
-                if "WSPD_value" in ds.keys():
+                if "WSPD_value" in ds:
                     # Data originally in mph.
                     ds["sfcWind"] = calc_clean._unit_windspd_mph_to_ms(ds["WSPD_value"])
                     ds = ds.drop("WSPD_value")
@@ -576,7 +571,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ds["sfcWind"].attrs["units"] = "m s-1"
 
                     # rsds: QA/QC flags
-                    if "WSPD_flag" in ds.keys():
+                    if "WSPD_flag" in ds:
                         ds = ds.rename({"WSPD_flag": "sfcWind_qc"})
                         ds["sfcWind_qc"].attrs["flag_values"] = "V S E"
                         ds["sfcWind_qc"].attrs["flag_meanings"] = "valid suspect edited"
@@ -586,14 +581,14 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ds["sfcWind"].attrs["comment"] = "Converted from mph to m/s."
 
                 # sfcWind_dir: wind direction
-                if "WDIR_value" in ds.keys():
+                if "WDIR_value" in ds:
                     # No conversions needed, do not make raw column.
                     ds = ds.rename({"WDIR_value": "sfcWind_dir"})
                     ds["sfcWind_dir"].attrs["long_name"] = "wind_direction"
                     ds["sfcWind_dir"].attrs["standard_name"] = "wind_from_direction"
                     ds["sfcWind_dir"].attrs["units"] = "degrees_clockwise_from_north"
 
-                    if "WDIR_flag" in ds.keys():
+                    if "WDIR_flag" in ds:
                         ds = ds.rename({"WDIR_flag": "sfcWind_dir_qc"})
                         ds["sfcWind_dir_qc"].attrs["flag_values"] = "V S E"
                         ds["sfcWind_dir_qc"].attrs[
@@ -610,7 +605,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
 
                 # Other variables: rename to match format
                 # Partial vapor pressure (kPa -> Pa) ## No CMIP standard name for this var, just CF.
-                if "PVPV_value" in ds.keys():
+                if "PVPV_value" in ds:
                     ds["pvp"] = calc_clean._unit_pres_kpa_to_pa(ds["PVPV_value"])
                     ds = ds.drop("PVPV_value")
 
@@ -620,7 +615,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ] = "water_vapor_partial_pressure_in_air"
                     ds["pvp"].attrs["units"] = "Pa"
 
-                    if "PVPV_flag" in ds.keys():
+                    if "PVPV_flag" in ds:
                         ds = ds.rename({"PVPV_flag": "pvp_qc"})
                         ds["pvp_qc"].attrs["flag_values"] = "V S E"
                         ds["pvp_qc"].attrs["flag_meanings"] = "valid suspect edited"
@@ -629,14 +624,14 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                     ds["pvp"].attrs["comment"] = "Converted from kPa to Pa."
 
                 # Saturated vapor pressure (kPa -> Pa)
-                if "SVPV_value" in ds.keys():
+                if "SVPV_value" in ds:
                     ds["svp"] = calc_clean._unit_pres_kpa_to_pa(ds["SVPV_value"])
                     ds = ds.drop("SVPV_value")
 
                     ds["svp"].attrs["long_name"] = "saturated_vapor_pressure"
                     ds["svp"].attrs["units"] = "Pa"
 
-                    if "SVPV_flag" in ds.keys():
+                    if "SVPV_flag" in ds:
                         ds = ds.rename({"SVPV_flag": "svp_qc"})
                         ds["svp_qc"].attrs["flag_values"] = "V S E"
                         ds["svp_qc"].attrs["flag_meanings"] = "valid suspect edited"
@@ -648,7 +643,7 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                 # Quality control: if any variable is completely empty, drop it.
                 # drop any column that does not have any valid (non-nan) data
                 # need to keep elevation separate, as it does have "valid" nan value, only drop if all other variables are also nans
-                for key in ds.keys():
+                for key in ds:
                     try:
                         if key != "elevation":
                             if np.isnan(ds[key].values).all():
@@ -662,12 +657,12 @@ def clean_scansnotel(rawdir: str, cleandir: str):
                             ds = ds.drop(key)
                             continue
 
-                    except Exception as e:
+                    except Exception:
                         # Add to handle errors for unsupported data types
                         continue
 
                 # For QA/QC flags, replace np.nan with "nan" to avoid h5netcdf overwrite to blank.
-                for key in ds.keys():
+                for key in ds:
                     if "qc" in key:
                         # Coerce all values in key to string.
                         ds[key] = ds[key].astype(str)

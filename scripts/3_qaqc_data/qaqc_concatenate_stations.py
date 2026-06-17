@@ -37,21 +37,21 @@ This script will fail on any additional runs because the input stations will be 
 Regeneration of the original input QAQC'd stations is required for a full re-run.
 """
 
+import datetime
 import os
 import sys
-import datetime
+from time import sleep, strftime, time
+
 import boto3
 import pandas as pd
 import xarray as xr
-from io import StringIO
-from time import time, strftime, sleep
 from QAQC_pipeline import qaqc_ds_to_df
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME, QAQC_WX
-
 # Silence warnings
 import warnings
+
+from paths import BUCKET_NAME, QAQC_WX
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -76,7 +76,7 @@ def main():
     # Concatenates stations for a given network using helper functions,
     # then exports the final result to s3 and returns the list of concatenated ERA-IDs.
     for network_name in target_networks:
-        final_concat_list = concatenate_stations(network_name)
+        concatenate_stations(network_name)
 
     # Print elapsed time
     ttime = time() - t0
@@ -123,9 +123,7 @@ def concatenation_check(station_list: list) -> pd.DataFrame:
     )
     # within each group of identical latitudes and longitudes, assign a unique integer
     station_list["concat_subset"] = (
-        station_list[station_list["concat_subset"] == True]
-        .groupby(lat_lon_cols)
-        .ngroup()
+        station_list[station_list["concat_subset"]].groupby(lat_lon_cols).ngroup()
     )
 
     # Order station list by flag
@@ -147,7 +145,7 @@ def concatenation_check(station_list: list) -> pd.DataFrame:
 
     # Standardize ERA id to "ERA-ID" (this is specific to Valleywater stations)
     if "era-id" in era_id_col:
-        concat_station_list.rename(columns={"era-id": "ERA-ID"}, inplace=True)
+        concat_station_list = concat_station_list.rename(columns={"era-id": "ERA-ID"})
 
     return concat_station_list
 

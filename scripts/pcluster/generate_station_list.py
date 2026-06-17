@@ -25,9 +25,10 @@ python generate_station_list.py -n "LOXWFO"
 python generate_station_list.py --network=LOXWFO
 """
 
-import pandas as pd
 import argparse
 from pathlib import Path
+
+import pandas as pd
 
 
 def generate_station_list(network: str):

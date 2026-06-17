@@ -27,14 +27,13 @@ Script functions for the unusual streaks QA/QC test, as a part of the QA/QC pipe
 
 import os
 import sys
+
 import boto3
 import numpy as np
 import pandas as pd
 from log_config import logger
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME
-
 from qaqc_plot import *
 from qaqc_utils import *
 
@@ -164,7 +163,7 @@ def infere_freq(df: pd.DataFrame) -> dict[float, float]:
     # Create resolutions dictionary
     frequencies = {
         np.round(n / len(df), decimals=5): float(f / 1e9)
-        for n, f in zip(frequencies.values, frequencies.index.values)
+        for n, f in zip(frequencies.values, frequencies.index.values, strict=False)
     }
     return frequencies
 
@@ -212,10 +211,7 @@ def infere_res_var(df: pd.DataFrame, var: str) -> float:
         rounded_to_whole = multiplied / 2
 
         # If mode is 0.25 or less, round to 0.1
-        if rounded_to_whole <= 0.25:
-            mode = 0.1
-        else:
-            mode = rounded_to_whole
+        mode = 0.1 if rounded_to_whole <= 0.25 else rounded_to_whole
 
         if mode <= 1:
             return mode
@@ -340,7 +336,7 @@ def qaqc_unusual_repeated_streaks(
             test_df = grab_valid_obs(test_df, var)  # subset for valid obs
 
             # first scans suspect values using entire record
-            if test_df[var].isna().all() == True:
+            if test_df[var].isna().all():
                 logger.info(
                     "All values for {var} are flagged, bypassing qaqc_unusual_repeated_streaks"
                 )
@@ -713,7 +709,7 @@ def full_day_compare(series0: pd.Series, series1: pd.Series) -> np.array:
 
     groups = []
     g = 0
-    for a, b in zip(series0.values, series1.values):
+    for a, b in zip(series0.values, series1.values, strict=False):
         if type(a) == np.ndarray and type(b) == np.ndarray and len(a) == len(b):
             if (a == b).all():
                 groups.append(g)
@@ -789,7 +785,9 @@ def consecutive_fullDay_repeats(
         [
             g
             for g, l in zip(
-                sequence_lengths["group"].values, sequence_lengths["length"].values
+                sequence_lengths["group"].values,
+                sequence_lengths["length"].values,
+                strict=False,
             )
             if l > threshold
         ]

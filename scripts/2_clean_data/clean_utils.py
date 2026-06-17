@@ -12,8 +12,8 @@ Intended Use
 Support utility functions for cleaning processes, as a part of the clean pipeline.
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import xarray as xr
 
 
@@ -35,7 +35,7 @@ def var_to_unique_list(ds: xr.Dataset, column: str) -> str:
         string that can be provided as the flag_values attribute for a QA/QC flag.
     """
     flagvals = ds[column].values.tolist()[0]
-    flagvals = [x for x in flagvals if pd.isnull(x) == False]  # Remove nas
+    flagvals = [x for x in flagvals if not pd.isnull(x)]  # Remove nas
     flagvals = list(np.unique(flagvals))  # Get unique values
     flagvals = " ".join(flagvals)
     return flagvals
