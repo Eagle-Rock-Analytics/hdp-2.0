@@ -27,10 +27,15 @@ Examples:
 """
 
 import argparse
+import os
+import sys
 
 import boto3
 
-BUCKET = "wecc-historical-wx"
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from paths import BUCKET_NAME
+
+BUCKET = BUCKET_NAME
 
 NETWORKS = [
     "ASOSAWOS",

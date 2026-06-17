@@ -26,9 +26,14 @@ python generate_station_list.py --network=LOXWFO
 """
 
 import argparse
+import os
+import sys
 from pathlib import Path
 
 import pandas as pd
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from paths import STATIONS_CSV_PATH
 
 
 def generate_station_list(network: str):
@@ -44,7 +49,7 @@ def generate_station_list(network: str):
         The network to process. Corresponds to the network name in the dataset.
     """
     # Read the CSV file containing station data
-    csv_filepath = "s3://wecc-historical-wx/2_clean_wx/temp_clean_all_station_list.csv"
+    csv_filepath = STATIONS_CSV_PATH
     stations_df = pd.read_csv(csv_filepath)
 
     # Define and create the directory (if it doesn't already exist)

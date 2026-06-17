@@ -24,6 +24,7 @@ Cleaned data for an individual network, priority variables, all times. Organized
 
 import gzip
 import os
+import sys
 import zipfile
 from datetime import datetime
 from io import BytesIO, StringIO
@@ -33,12 +34,14 @@ import calc_clean
 import numpy as np
 import pandas as pd
 import requests
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from bs4 import BeautifulSoup
 from clean_utils import get_file_paths
+from paths import BUCKET_NAME
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
-BUCKET_NAME = "wecc-historical-wx"
 
 ## Set up directory to save files temporarily, if it doesn't already exist.
 os.makedirs("temp", exist_ok=True)

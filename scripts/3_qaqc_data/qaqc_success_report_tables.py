@@ -199,7 +199,7 @@ def network_sum_flag_counts(network: str, timestep: str) -> None:
 
     ## Send final counts file to AWS as CSV
 
-    csv_s3_filepath = f"s3://wecc-historical-wx/4_merge_wx/per_network_flag_counts_{timestep}_timestep/{network}_flag_counts_{timestep}_timestep.csv"
+    csv_s3_filepath = f"s3://{BUCKET_NAME}/4_merge_wx/per_network_flag_counts_{timestep}_timestep/{network}_flag_counts_{timestep}_timestep.csv"
     counts_final.to_csv(csv_s3_filepath, index=False)
     print(f"Sending summed counts dataframe for {network} to: {csv_s3_filepath}")
 
@@ -262,7 +262,9 @@ def total_sum_flag_counts(timestep: str) -> None:
     if len(summed_counts_df) == 0:
         return None
     else:
-        csv_s3_filepath = f"s3://wecc-historical-wx/4_merge_wx/total_flag_counts_{timestep}_timestep.csv"
+        csv_s3_filepath = (
+            f"s3://{BUCKET_NAME}/4_merge_wx/total_flag_counts_{timestep}_timestep.csv"
+        )
         final_table.to_csv(csv_s3_filepath, index=False)
         print(f"Sending final summed counts dataframe for to: {csv_s3_filepath}")
 

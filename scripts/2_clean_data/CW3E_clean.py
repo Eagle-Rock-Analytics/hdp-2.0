@@ -41,12 +41,15 @@ import pandas as pd
 # Optional: Silence pandas' future warnings about regex (not relevant here)
 warnings.filterwarnings(action="ignore", category=FutureWarning)
 
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import calc_clean
 from clean_utils import get_file_paths
+from paths import BUCKET_NAME
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
-BUCKET_NAME = "wecc-historical-wx"
 
 # Set up directory to save files temporarily, if it doesn't already exist.
 os.makedirs("temp", exist_ok=True)
@@ -248,7 +251,7 @@ def clean_cw3e(rawdir: str, cleandir: str):
                                 f"{station} has {file_count} files for 20{year}, cleaning in progress..."
                             )
                             df_stat = dd.read_csv(
-                                f"s3://wecc-historical-wx/1_raw_wx/CW3E/{station.lower()}{year}*m",
+                                f"s3://{BUCKET_NAME}/1_raw_wx/CW3E/{station.lower()}{year}*m",
                                 names=colnames,
                                 na_values=[-99999],
                                 parse_dates={

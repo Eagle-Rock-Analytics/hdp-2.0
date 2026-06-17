@@ -1,0 +1,821 @@
+bandit...................................................................Failed
+- hook id: bandit
+- exit code: 1
+
+[main]  INFO    profile include tests: None
+[main]  INFO    profile exclude tests: None
+[main]  INFO    cli include tests: None
+[main]  INFO    cli exclude tests: None
+[main]  INFO    running on Python 3.12.11
+Working... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--[warnings]      WARNING invalid escape sequence '\d'
+
+[warnings]      WARNING invalid escape sequence '\d'
+
+[warnings]      WARNING invalid escape sequence '\d'
+
+[warnings]      WARNING invalid escape sequence '\d'
+
+[warnings]      WARNING invalid escape sequence '\d'
+
+Working... ━━━━━━━━━╸━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  24% 0:00:01[warnings]      WARNING invalid escape sequence '\s'
+
+Working... ━━━━━━━━━━╸━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  27% 0:00:02[warnings]      WARNING invalid escape sequence '\d'
+
+[warnings]      WARNING invalid escape sequence '\d'
+
+[warnings]      WARNING invalid escape sequence '\d'
+
+[warnings]      WARNING invalid escape sequence '\d'
+
+[warnings]      WARNING invalid escape sequence '\d'
+
+Working... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:01
+Run started:2026-06-17 21:47:33.027161
+
+Test results:
+>> Issue: [B402:blacklist] A FTP-related module is being imported.  FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_imports.html#b402-import-ftplib
+   Location: scripts/1_pull_data/ASOSAWOS_pullftp.py:28:0
+27
+28      from ftplib import FTP
+29      from datetime import datetime, timezone
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/ASOSAWOS_pullftp.py:121:12
+120         awosurl = "https://www.ncei.noaa.gov/access/homr/file/awos-stations.txt"
+121         awosr = requests.get(awosurl)
+122         lines = awosr.content.split(b"\n")  # Split by line
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/ASOSAWOS_pullftp.py:183:12
+182         asosurl = "https://www.ncei.noaa.gov/access/homr/file/asos-stations.txt"
+183         asosr = requests.get(asosurl)
+184         lines = asosr.content.split(b"\n")  # Split by line
+
+--------------------------------------------------
+>> Issue: [B321:blacklist] FTP-related functions are being called. FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_calls.html#b321-ftplib
+   Location: scripts/1_pull_data/ASOSAWOS_pullftp.py:292:10
+291         filename = "isd-history.csv"
+292         ftp = FTP("ftp.ncdc.noaa.gov")
+293         ftp.login()  # user anonymous, password anonymous
+
+--------------------------------------------------
+>> Issue: [B321:blacklist] FTP-related functions are being called. FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_calls.html#b321-ftplib
+   Location: scripts/1_pull_data/ASOSAWOS_pullftp.py:432:10
+431         # Login using ftplib
+432         ftp = FTP("ftp.ncdc.noaa.gov")
+433         ftp.login()  # user anonymous, password anonymous
+
+--------------------------------------------------
+>> Issue: [B402:blacklist] A FTP-related module is being imported.  FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_imports.html#b402-import-ftplib
+   Location: scripts/1_pull_data/CIMIS_pull.py:28:0
+27
+28      from ftplib import FTP
+29      from datetime import datetime, timezone, date
+
+--------------------------------------------------
+>> Issue: [B321:blacklist] FTP-related functions are being called. FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_calls.html#b321-ftplib
+   Location: scripts/1_pull_data/CIMIS_pull.py:58:10
+57          # Login using ftplib, get list of stations as csv
+58          ftp = FTP("ftpcimis.water.ca.gov")
+59          ftp.login()  # user anonymous, password anonymous
+
+--------------------------------------------------
+>> Issue: [B321:blacklist] FTP-related functions are being called. FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_calls.html#b321-ftplib
+   Location: scripts/1_pull_data/CIMIS_pull.py:114:10
+113         # Login using ftplib
+114         ftp = FTP("ftpcimis.water.ca.gov")
+115         ftp.login()  # user anonymous, password anonymous
+
+--------------------------------------------------
+>> Issue: [B321:blacklist] FTP-related functions are being called. FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_calls.html#b321-ftplib
+   Location: scripts/1_pull_data/CIMIS_pull.py:262:10
+261         # Login using ftplib
+262         ftp = FTP("ftpcimis.water.ca.gov")
+263         ftp.login()  # user anonymous, password anonymous
+
+--------------------------------------------------
+>> Issue: [B402:blacklist] A FTP-related module is being imported.  FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_imports.html#b402-import-ftplib
+   Location: scripts/1_pull_data/CW3E_pull.py:27:0
+26
+27      from ftplib import FTP
+28      from datetime import datetime
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/CW3E_pull.py:82:18
+81              url = f"https://api.synopticdata.com/v2/stations/metadata?token={token}&network=263&bbox={bbox_api}&recent=20&output=json"
+82              request = requests.get(url).json()
+83
+
+--------------------------------------------------
+>> Issue: [B321:blacklist] FTP-related functions are being called. FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_calls.html#b321-ftplib
+   Location: scripts/1_pull_data/CW3E_pull.py:128:10
+127         # Login using ftplib
+128         ftp = FTP("sioftp.ucsd.edu")
+129         ftp.login()  # user anonymous, password anonymous
+
+--------------------------------------------------
+>> Issue: [B321:blacklist] FTP-related functions are being called. FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_calls.html#b321-ftplib
+   Location: scripts/1_pull_data/CW3E_pull.py:266:10
+265         # Login using ftplib
+266         ftp = FTP("sioftp.ucsd.edu")
+267         ftp.login()  # user anonymous, password anonymous
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/HADS_pull.py:73:8
+72          url = "https://hads.ncep.noaa.gov/compressed_defs/all_dcp_defs.txt"
+73          r = requests.get(url)
+74          lines = r.content.split(b"\n")
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/HADS_pull.py:177:8
+176         # create response object
+177         r = requests.get(url)
+178
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/HADS_pull.py:224:13
+223             # create response object
+224             with requests.get(file_link, stream=True) as r:
+225                 # If API call returns a response
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/MADIS_pull.py:60:8
+59          # Produce table of station metadata from Synoptic API
+60          r = requests.get(f"https://api.synopticdata.com/v2/networks?token={token}").json()
+61          networks = pd.DataFrame(r["MNET"])
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/MADIS_pull.py:109:18
+108
+109             request = requests.get(url).json()
+110             ids = []
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/MADIS_pull.py:221:17
+220
+221                 with requests.get(url, stream=True) as r:
+222                     # If API call returns a response
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/MADIS_pull.py:358:17
+357
+358                 with requests.get(url, stream=True) as r:
+359                     # If API call returns a response
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/MADIS_sensors.py:135:22
+134                 url = f"https://api.synopticdata.com/v2/stations/metadata?token={token}&network={networkid}&bbox={bbox_api}&complete=1&sensorvars=1&recent=20&output=json"
+135                 request = requests.get(url).json()
+136
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/MARITIME_pull.py:74:8
+73          url = "https://www.ndbc.noaa.gov/data/stations/station_table.txt"
+74          r = requests.get(url)
+75          lines = r.content.split(b"\n")
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/MARITIME_pull.py:259:25
+258
+259                         with requests.get(url, stream=True) as r:
+260                             if r.status_code == 404:
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/MARITIME_pull.py:295:29
+294
+295                             with requests.get(url, stream=True) as r:
+296                                 if r.status_code == 404:
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/MARITIME_pull.py:416:25
+415
+416                         with requests.get(url, stream=True) as r:
+417                             if r.status_code == 404:
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/MARITIME_pull.py:460:33
+459
+460                                 with requests.get(url, stream=True) as r:
+461                                     if r.status_code == 404:
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/1_pull_data/MARITIME_pull.py:517:29
+516
+517                             with requests.get(url, stream=True) as r:
+518                                 if r.status_code == 404:
+
+--------------------------------------------------
+>> Issue: [B402:blacklist] A FTP-related module is being imported.  FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_imports.html#b402-import-ftplib
+   Location: scripts/1_pull_data/OtherISD_pull.py:27:0
+26
+27      from ftplib import FTP
+28      from datetime import datetime, timezone
+
+--------------------------------------------------
+>> Issue: [B321:blacklist] FTP-related functions are being called. FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_calls.html#b321-ftplib
+   Location: scripts/1_pull_data/OtherISD_pull.py:69:10
+68          filename = "isd-history.csv"
+69          ftp = FTP("ftp.ncdc.noaa.gov")
+70          ftp.login()  # user anonymous, password anonymous
+
+--------------------------------------------------
+>> Issue: [B321:blacklist] FTP-related functions are being called. FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_calls.html#b321-ftplib
+   Location: scripts/1_pull_data/OtherISD_pull.py:174:10
+173         # Login using ftplib
+174         ftp = FTP("ftp.ncdc.noaa.gov")
+175         ftp.login()  # user anonymous, password anonymous
+
+--------------------------------------------------
+>> Issue: [B402:blacklist] A FTP-related module is being imported.  FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_imports.html#b402-import-ftplib
+   Location: scripts/1_pull_data/calc_pull.py:23:0
+22      from io import BytesIO, StringIO
+23      from ftplib import FTP
+24
+
+--------------------------------------------------
+>> Issue: [B402:blacklist] A FTP-related module is being imported.  FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_imports.html#b402-import-ftplib
+   Location: scripts/1_pull_data/stnlist_update_pull.py:50:0
+49      from datetime import datetime
+50      from ftplib import FTP
+51      from io import StringIO
+
+--------------------------------------------------
+>> Issue: [B321:blacklist] FTP-related functions are being called. FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_calls.html#b321-ftplib
+   Location: scripts/1_pull_data/stnlist_update_pull.py:588:14
+587             # Login using ftplib
+588             ftp = FTP("ftp.ncdc.noaa.gov")
+589             ftp.login()  # user anonymous, password anonymous
+
+--------------------------------------------------
+>> Issue: [B402:blacklist] A FTP-related module is being imported.  FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_imports.html#b402-import-ftplib
+   Location: scripts/2_clean_data/ASOSAWOS_clean.py:44:0
+43      import zipfile
+44      from ftplib import FTP
+45      import gzip
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b110_try_except_pass.html
+   Location: scripts/2_clean_data/ASOSAWOS_clean.py:67:0
+66          os.mkdir("temp")
+67      except:
+68          pass
+69
+
+--------------------------------------------------
+>> Issue: [B112:try_except_continue] Try, Except, Continue detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b112_try_except_continue.html
+   Location: scripts/2_clean_data/ASOSAWOS_clean.py:1026:24
+1025                                    continue
+1026                            except:
+1027                                continue
+1028
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b110_try_except_pass.html
+   Location: scripts/2_clean_data/CIMIS_clean.py:54:0
+53          os.mkdir("temp")
+54      except:
+55          pass
+56
+
+--------------------------------------------------
+>> Issue: [B112:try_except_continue] Try, Except, Continue detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b112_try_except_continue.html
+   Location: scripts/2_clean_data/CIMIS_clean.py:636:20
+635
+636                         except Exception as e:
+637                             # Add to handle errors for unsupported data types
+638                             continue
+639
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b110_try_except_pass.html
+   Location: scripts/2_clean_data/CW3E_clean.py:53:0
+52          os.mkdir("temp")
+53      except:
+54          pass
+55
+
+--------------------------------------------------
+>> Issue: [B112:try_except_continue] Try, Except, Continue detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b112_try_except_continue.html
+   Location: scripts/2_clean_data/CW3E_clean.py:526:32
+525                                                 ds = ds.drop(key)
+526                                     except:
+527                                         # Add to handle errors for unsupported data types
+528                                         continue
+529
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b110_try_except_pass.html
+   Location: scripts/2_clean_data/MADIS_clean.py:65:0
+64          os.mkdir("temp")
+65      except:
+66          pass
+67
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/2_clean_data/MADIS_clean.py:93:14
+92          url = f"https://api.synopticdata.com/v2/qctypes?token={token}"
+93          request = requests.get(url).json()
+94
+
+--------------------------------------------------
+>> Issue: [B112:try_except_continue] Try, Except, Continue detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b112_try_except_continue.html
+   Location: scripts/2_clean_data/MADIS_clean.py:1727:20
+1726                                    ds = ds.drop(key)
+1727                        except Exception as e:
+1728                            # Add to handle errors for unsupported data types
+1729                            continue
+1730
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b110_try_except_pass.html
+   Location: scripts/2_clean_data/MARITIME_clean.py:47:0
+46          os.mkdir("temp")
+47      except:
+48          pass
+49
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/2_clean_data/MARITIME_clean.py:67:15
+66          """
+67          response = requests.get(url)
+68          soup = BeautifulSoup(response.text, "html.parser")
+
+--------------------------------------------------
+>> Issue: [B112:try_except_continue] Try, Except, Continue detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b112_try_except_continue.html
+   Location: scripts/2_clean_data/MARITIME_clean.py:703:20
+702                                 continue
+703                         except Exception as e:
+704                             # Add to handle errors for unsupported data types
+705                             continue
+706
+
+--------------------------------------------------
+>> Issue: [B402:blacklist] A FTP-related module is being imported.  FTP is considered insecure. Use SSH/SFTP/SCP or some other encrypted protocol.
+   Severity: High   Confidence: High
+   CWE: CWE-319 (https://cwe.mitre.org/data/definitions/319.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/blacklists/blacklist_imports.html#b402-import-ftplib
+   Location: scripts/2_clean_data/OtherISD_clean.py:42:0
+41      from io import BytesIO, StringIO
+42      from ftplib import FTP
+43      import gzip
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b110_try_except_pass.html
+   Location: scripts/2_clean_data/OtherISD_clean.py:66:0
+65          os.mkdir("temp")
+66      except:
+67          pass
+68
+
+--------------------------------------------------
+>> Issue: [B112:try_except_continue] Try, Except, Continue detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b112_try_except_continue.html
+   Location: scripts/2_clean_data/OtherISD_clean.py:931:24
+930
+931                             except Exception as e:
+932                                 # Add to handle errors for unsupported data types
+933                                 continue
+934
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b110_try_except_pass.html
+   Location: scripts/2_clean_data/SCANSNOTEL_clean.py:51:0
+50          os.mkdir("temp")
+51      except:
+52          pass
+53
+
+--------------------------------------------------
+>> Issue: [B112:try_except_continue] Try, Except, Continue detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b112_try_except_continue.html
+   Location: scripts/2_clean_data/SCANSNOTEL_clean.py:665:20
+664
+665                         except Exception as e:
+666                             # Add to handle errors for unsupported data types
+667                             continue
+668
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/3_qaqc_data/homr_metadata.py:99:14
+98          testurl = f"https://www.ncei.noaa.gov/access/homr/services/station/{id}"
+99          request = requests.get(testurl).json()
+100         for i in request["stationCollection"]["stations"]:
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/3_qaqc_data/homr_metadata.py:178:22
+177             try:
+178                 request = requests.get(testurl).json()
+179                 df = pd.json_normalize(request["stationCollection"]["stations"])
+
+--------------------------------------------------
+>> Issue: [B113:request_without_timeout] Call to requests without timeout
+   Severity: Medium   Confidence: Low
+   CWE: CWE-400 (https://cwe.mitre.org/data/definitions/400.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b113_request_without_timeout.html
+   Location: scripts/3_qaqc_data/qaqc_wholestation.py:304:17
+303             # format query string and return value
+304             result = requests.get((url + urllib.parse.urlencode(params)))
+305             dem_elev_long = float(result.json()["value"])
+
+--------------------------------------------------
+>> Issue: [B112:try_except_continue] Try, Except, Continue detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b112_try_except_continue.html
+   Location: scripts/4_merge_data/stnlist_update_merge.py:183:12
+182                     )
+183                 except Exception as e:
+184                     continue
+185
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_derived_variables.py:56:4
+55          correct_derivation = ((1 / 273) - 0.0001844 * np.log(e_vap / 0.611)) ** -1
+56          assert correct_derivation.equals(calc_clean_derived)
+57
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_derived_variables.py:65:4
+64          ) ** -1
+65          assert correct_derivation.equals(calc_clean_derived)
+66
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_derived_variables.py:86:4
+85          correct_derivation = 100.0 * (e_vap / es)
+86          assert correct_derivation.equals(calc_clean_derived)
+87
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_derived_variables.py:105:4
+104         correct_derivation = np.sqrt((grab_uwind) ** 2 + (grab_vwind) ** 2)
+105         assert correct_derivation.equals(calc_clean_derived)
+106
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_derived_variables.py:140:4
+139         )
+140         assert correct_derivation.equals(calc_clean_derived)
+141
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_derived_variables.py:149:4
+148         correct_derivation = _unit_pres_inHg_to_pa(ps)
+149         assert correct_derivation.equals(calc_clean_derived)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:53:4
+52          correct_conversion = grab_temp_C + 273.15
+53          assert correct_conversion.equals(calc_clean_converted)
+54
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:60:4
+59          correct_conversion = (5 / 9) * (grab_temp_f - 32) + 273.15
+60          assert correct_conversion.equals(calc_clean_converted)
+61
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:77:4
+76          correct_conversion = grab_precip * 25.4
+77          assert correct_conversion.equals(calc_clean_converted)
+78
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:97:4
+96          correct_conversion = grab_wind_kts / 1.94
+97          assert correct_conversion.equals(calc_clean_converted)
+98
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:104:4
+103         correct_conversion = grab_wind_mph / 2.237
+104         assert correct_conversion.equals(calc_clean_converted)
+105
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:129:4
+128         correct_conversion = grab_pressure_hpa * 100.0
+129         assert correct_conversion.equals(calc_clean_converted)
+130
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:136:4
+135         correct_coversion = grab_pressure_kpa * 1000.0
+136         assert correct_coversion.equals(calc_clean_converted)
+137
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:143:4
+142         correct_conversion = grab_pressure_inhg * 3386.39
+143         assert correct_conversion.equals(calc_clean_converted)
+144
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:159:4
+158         correct_conversion = grab_moisture / 1000.0
+159         assert correct_conversion.equals(calc_clean_converted)
+160
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:174:4
+173         correct_conversion = grab_elevation * 0.3048
+174         assert correct_conversion.equals(calc_clean_converted)
+175
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:198:4
+197         correct_conversion = _deg + _min / 60 + _sec / 3600
+198         assert correct_conversion == calc_clean_converted
+199
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:208:4
+207         correct_conversion = float(_deg) + float(_mm) / 60
+208         assert correct_conversion == calc_clean_converted
+209
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:236:4
+235         )
+236         assert correct_conversion == (calc_clean_converted)
+237
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/0.0.0/plugins/b101_assert_used.html
+   Location: scripts/tests/test_unit_conversions.py:247:4
+246         )
+247         assert correct_conversion == (calc_clean_converted)
+
+--------------------------------------------------
+
+Code scanned:
+        Total lines of code: 20773
+        Total lines skipped (#nosec): 0
+
+Run metrics:
+        Total issues (by severity):
+                Undefined: 0
+                Low: 35
+                Medium: 22
+                High: 18
+        Total issues (by confidence):
+                Undefined: 0
+                Low: 22
+                Medium: 0
+                High: 53
+Files skipped (0):

@@ -25,6 +25,8 @@ This is a separate function/branch.
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
+import os
+import sys
 from datetime import date, datetime, timezone
 from ftplib import FTP
 from io import StringIO
@@ -33,8 +35,10 @@ import boto3
 import pandas as pd
 from calc_pull import ftp_to_aws
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from paths import BUCKET_NAME
+
 s3 = boto3.client("s3")
-BUCKET_NAME = "wecc-historical-wx"
 DIRECTORY = "1_raw_wx/CIMIS/"
 
 

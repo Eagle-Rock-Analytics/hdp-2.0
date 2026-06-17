@@ -54,7 +54,7 @@ def get_station_list(network: str) -> pd.DataFrame:
         station list of all stations within a network
     """
     station_list = pd.read_csv(
-        f"s3://wecc-historical-wx/{CLEAN_WX}/{network}/stationlist_{network}_cleaned.csv"
+        f"s3://{BUCKET_NAME}/{CLEAN_WX}/{network}/stationlist_{network}_cleaned.csv"
     )
     return station_list
 

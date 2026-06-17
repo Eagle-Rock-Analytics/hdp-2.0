@@ -47,16 +47,15 @@ import pandas as pd
 # Optional: Silence pandas' future warnings about regex (not relevant here)
 warnings.filterwarnings(action="ignore", category=FutureWarning)
 
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import calc_clean
 from clean_utils import get_file_paths
+from paths import BUCKET_NAME, WECC_MAR, WECC_TERR
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
-BUCKET_NAME = "wecc-historical-wx"
-WECC_TERR = (
-    "s3://wecc-historical-wx/0_maps/WECC_Informational_MarineCoastal_Boundary_land.shp"
-)
-WECC_MAR = "s3://wecc-historical-wx/0_maps/WECC_Informational_MarineCoastal_Boundary_marine.shp"
 
 
 os.makedirs("temp", exist_ok=True)
@@ -81,9 +80,7 @@ def merge_station_lists(key_asosawos: str, key_isd: str, cleandir: str) -> pd.Da
     """
 
     # first process ASOSAWOS stations
-    asosawos_list = pd.read_csv(
-        "s3://wecc-historical-wx/1_raw_wx/stationlist_ASOSAWOS.csv"
-    )
+    asosawos_list = pd.read_csv(f"s3://{BUCKET_NAME}/1_raw_wx/stationlist_ASOSAWOS.csv")
 
     # ASOSAWOS list has one duplicated station, one row which has start/stop data and one which does not.
     # Drop the less complete row.
@@ -93,9 +90,7 @@ def merge_station_lists(key_asosawos: str, key_isd: str, cleandir: str) -> pd.Da
     asosawos_list = asosawos_list.drop(index)
 
     # next process ISD stations
-    isd_list = pd.read_csv(
-        "s3://wecc-historical-wx/1_raw_wx/stationlist_ISD_ASOSAWOS.csv"
-    )
+    isd_list = pd.read_csv(f"s3://{BUCKET_NAME}/1_raw_wx/stationlist_ISD_ASOSAWOS.csv")
 
     # Round asosawos down to 3 decimal points of accuracy
     asosawos_round = asosawos_list.round({"LAT": 3, "LON": 3})
@@ -173,7 +168,7 @@ def clean_asosawos(rawdir: str, cleandir: str):
             latmin, latmax = 30.142739, 60.003861
 
         station_file = pd.read_csv(
-            "s3://wecc-historical-wx/2_clean_wx/stationlist_ASOSAWOS_merge.csv"
+            f"s3://{BUCKET_NAME}/2_clean_wx/stationlist_ASOSAWOS_merge.csv"
         )
         station_file = merge_station_lists(key_asosawos, key_isd, cleandir)
         stations = station_file["ISD-ID"].dropna().astype(str)

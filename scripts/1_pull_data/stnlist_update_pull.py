@@ -37,6 +37,7 @@ Run to ensure all available stations are retrievable per network, including fail
 """
 
 import os
+import sys
 from datetime import datetime
 from ftplib import FTP
 from io import StringIO
@@ -52,14 +53,11 @@ from OtherISD_pull import get_otherisd_data_ftp
 from SCANSNOTEL_pull import get_scan_station_data
 from smart_open import open
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from paths import BUCKET_NAME, WECC_MAR, WECC_TERR
+
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")
-
-BUCKET_NAME = "wecc-historical-wx"
-WECC_TERR = (
-    "s3://wecc-historical-wx/0_maps/WECC_Informational_MarineCoastal_Boundary_land.shp"
-)
-WECC_MAR = "s3://wecc-historical-wx/0_maps/WECC_Informational_MarineCoastal_Boundary_marine.shp"
 
 # Define lists of networks, according to type
 MADIS = [

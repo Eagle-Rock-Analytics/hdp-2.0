@@ -43,7 +43,14 @@ from merge_eraqc_counts import (
 )
 from merge_hourly_standardization import merge_hourly_standardization
 from merge_log_config import setup_logger, upload_log_to_s3
-from paths import BUCKET_NAME, MERGE_WX, QAQC_WX, STATIONS_CSV_PATH
+from paths import (
+    BUCKET_NAME,
+    MERGE_WX,
+    PUBLISH_BUCKET,
+    PUBLISH_PREFIX,
+    QAQC_WX,
+    STATIONS_CSV_PATH,
+)
 
 
 def read_station_metadata(s3_path: str, logger: logging.Logger) -> pd.DataFrame:
@@ -545,7 +552,7 @@ def run_merge_one_station(
 
         # Write the xarray Dataset as a Zarr file to the specified S3 path
         write_zarr_to_s3(
-            ds_merged, BUCKET_NAME, MERGE_WX, network_name, station, logger
+            ds_merged, PUBLISH_BUCKET, PUBLISH_PREFIX, network_name, station, logger
         )
 
         # Done! Print elapsed time

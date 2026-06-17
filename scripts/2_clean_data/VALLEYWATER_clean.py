@@ -23,6 +23,7 @@ Intended Use
 Cleaned data for an individual network, priority variables, all times. Organized by station as zarr.
 """
 
+import os
 import sys
 import time
 import warnings
@@ -30,11 +31,13 @@ from datetime import datetime, timezone
 from typing import TypeIO
 
 import boto3
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import numpy as np
 import pandas as pd
 import xarray as xr
+from paths import BUCKET_NAME
 
-BUCKET_NAME = "wecc-historical-wx"
 NETWORK = "VALLEYWATER"
 RAW_DIR = "1_raw_wx/VALLEYWATER"
 CLEAN_DIR = "2_clean_wx/VALLEYWATER"
@@ -85,7 +88,7 @@ def main():
     # This info was manually retrieved from the API
     # See scrape_json_file.ipynb for more info (in the valley water repo)
     station_info_csv_filepath = (
-        "s3://wecc-historical-wx/1_raw_wx/VALLEYWATER/VALLEYWATER_station_info.csv"
+        f"s3://{BUCKET_NAME}/1_raw_wx/VALLEYWATER/VALLEYWATER_station_info.csv"
     )
     station_info_df = pd.read_csv(station_info_csv_filepath)
 

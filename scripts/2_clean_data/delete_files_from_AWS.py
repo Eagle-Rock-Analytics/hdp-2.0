@@ -39,13 +39,18 @@ Options:
         and should not proceed through cleaning.
 """
 
+import os
+import sys
+
 import boto3
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pandas as pd
 import s3fs
 from clean_utils import get_file_paths
+from paths import BUCKET_NAME
 
 s3 = boto3.resource("s3")
-BUCKET_NAME = "wecc-historical-wx"
 
 
 def delete_files_from_AWS(network: str, which_to_delete: str):

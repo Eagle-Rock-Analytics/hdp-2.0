@@ -27,12 +27,17 @@ Example usage
 python CW3E_combine.py
 """
 
+import os
+import sys
 from time import time
 
 import boto3
 import pandas as pd
 import s3fs
 import xarray as xr
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from paths import BUCKET_NAME, STATIONS_CSV_PATH
 
 
 def get_filenames_in_s3_folder(bucket: str, folder: str) -> list[str]:
@@ -143,11 +148,9 @@ def main():
     fs = s3fs.S3FileSystem()
 
     # Define s3 paths and such
-    bucket = "wecc-historical-wx"
+    bucket = BUCKET_NAME
     CW3E_cleaned_folder = "2_clean_wx/CW3E"
-    csv_filepath_s3 = (
-        "s3://wecc-historical-wx/2_clean_wx/temp_clean_all_station_list.csv"
-    )
+    csv_filepath_s3 = STATIONS_CSV_PATH
 
     # Read list of cleaned stations from CSV
     stations_df = pd.read_csv(csv_filepath_s3)

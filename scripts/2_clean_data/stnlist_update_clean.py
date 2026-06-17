@@ -22,20 +22,22 @@ Notes
 Because errors.csv are parsed, very old errors.csv may want to be removed manually from AWS or thresholded below.
 """
 
+import os
+import sys
 from datetime import datetime
 from io import BytesIO, StringIO
 
 import boto3
 import numpy as np
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pandas as pd
 import s3fs
 import xarray as xr
+from paths import BUCKET_NAME, CLEAN_WX, RAW_WX
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")
-BUCKET_NAME = "wecc-historical-wx"
-RAW_WX = "1_raw_wx/"
-CLEAN_WX = "2_clean_wx/"
 
 
 def get_station_list(network: str) -> pd.DataFrame:
@@ -474,7 +476,7 @@ def clean_qa(network: str, clean_var_add: bool = False, cwop_letter: str | None 
                 try:
                     print(file)
                     fs = s3fs.S3FileSystem()
-                    aws_url = f"s3://wecc-historical-wx/{file}"
+                    aws_url = f"s3://{BUCKET_NAME}/{file}"
 
                     if network == "CWOP" and cwop_letter is not None:
                         # produces stationlist update of only stations within that cwop_letter so it doesnt overwrite

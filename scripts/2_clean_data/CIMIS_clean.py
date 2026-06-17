@@ -40,12 +40,15 @@ import pandas as pd
 # Optional: Silence pandas' future warnings about regex (not relevant here)
 warnings.filterwarnings(action="ignore", category=FutureWarning)
 
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import calc_clean
 from clean_utils import get_file_paths, var_to_unique_list
+from paths import BUCKET_NAME
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
-BUCKET_NAME = "wecc-historical-wx"
 
 # Set up directory to save files temporarily, if it doesn't already exist.
 os.makedirs("temp", exist_ok=True)

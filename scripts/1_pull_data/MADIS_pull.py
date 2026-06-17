@@ -22,7 +22,9 @@ Notes
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
+import os
 import re
+import sys
 from datetime import datetime
 from io import StringIO
 
@@ -32,13 +34,11 @@ import pandas as pd
 import requests
 from calc_pull import get_wecc_poly
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from paths import BUCKET_NAME, WECC_MAR, WECC_TERR
+
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
-BUCKET_NAME = "wecc-historical-wx"
-WECC_TERR = (
-    "s3://wecc-historical-wx/0_maps/WECC_Informational_MarineCoastal_Boundary_land.shp"
-)
-WECC_MAR = "s3://wecc-historical-wx/0_maps/WECC_Informational_MarineCoastal_Boundary_marine.shp"
 RAW_PATH = "1_raw_wx/"
 
 

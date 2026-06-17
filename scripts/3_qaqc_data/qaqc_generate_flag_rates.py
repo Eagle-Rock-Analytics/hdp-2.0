@@ -145,9 +145,7 @@ def network_rates_table(timestep: str) -> None:
     flag_rate_df = flag_rate_df.rename(columns={"eraqc_flag_values": "networks"})
 
     ## Send final flag rates file to AWS as CSV
-    csv_s3_filepath = (
-        f"s3://wecc-historical-wx/4_merge_wx/network_{timestep}_flag_rates.csv"
-    )
+    csv_s3_filepath = f"s3://{BUCKET_NAME}/4_merge_wx/network_{timestep}_flag_rates.csv"
 
     print(f"Sending {timestep} timestep network flag rates CSV to: {csv_s3_filepath}")
     flag_rate_df.to_csv(csv_s3_filepath, index=False)
@@ -214,9 +212,7 @@ def station_rates_table(timestep: str) -> None:
     flag_rate_df = flag_rate_df.rename(columns={"eraqc_flag_values": "era-id"})
 
     ## Send final flag rates file to AWS as CSV
-    csv_s3_filepath = (
-        f"s3://wecc-historical-wx/4_merge_wx/station_{timestep}_flag_rates.csv"
-    )
+    csv_s3_filepath = f"s3://{BUCKET_NAME}/4_merge_wx/station_{timestep}_flag_rates.csv"
 
     print(f"Sending {timestep} timestep station flag rates CSV to: {csv_s3_filepath}")
     flag_rate_df.to_csv(csv_s3_filepath, index=False)

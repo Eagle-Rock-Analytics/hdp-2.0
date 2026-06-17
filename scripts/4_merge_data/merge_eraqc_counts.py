@@ -14,10 +14,15 @@ Intended Use
 Import into merge workflows to generate information for the QAQC success report.
 """
 
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import inspect
 import logging
 
 import pandas as pd
+from paths import BUCKET_NAME, MERGE_WX
 
 
 def eraqc_counts_native_timestep(
@@ -73,7 +78,7 @@ def eraqc_counts_native_timestep(
         flag_counts = flag_counts.astype(int)
 
         # send file to AWS
-        csv_s3_filepath = f"s3://wecc-historical-wx/4_merge_wx/{network}/eraqc_counts_native_timestep/{station}_flag_counts_native_timestep.csv"
+        csv_s3_filepath = f"s3://{BUCKET_NAME}/{MERGE_WX}/{network}/eraqc_counts_native_timestep/{station}_flag_counts_native_timestep.csv"
         flag_counts.to_csv(csv_s3_filepath, index=True)
 
         # Update logger
@@ -146,7 +151,7 @@ def eraqc_counts_hourly_timestep(
         flag_counts = flag_counts.astype(int)
 
         # send file to AWS
-        csv_s3_filepath = f"s3://wecc-historical-wx/4_merge_wx/{network}/eraqc_counts_hourly_timestep/{station}_flag_counts_hourly_standardized.csv"
+        csv_s3_filepath = f"s3://{BUCKET_NAME}/{MERGE_WX}/{network}/eraqc_counts_hourly_timestep/{station}_flag_counts_hourly_standardized.csv"
         flag_counts.to_csv(csv_s3_filepath, index=True)
 
         # Update logger

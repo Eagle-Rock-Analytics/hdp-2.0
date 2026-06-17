@@ -25,6 +25,8 @@ This is a separate function/branch.
 See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html for guidance.
 """
 
+import os
+import sys
 from datetime import datetime, timezone
 from ftplib import FTP
 from io import BytesIO, StringIO
@@ -38,13 +40,11 @@ from calc_pull import ftp_to_aws, get_wecc_poly
 from geopandas.tools import sjoin
 from shapely.geometry import Point
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from paths import BUCKET_NAME, WECC_MAR, WECC_TERR
+
 s3 = boto3.client("s3")
-BUCKET_NAME = "wecc-historical-wx"
-DIRECTORY = "1_raw_wx/ASOSAWOS/"
-WECC_TERR = (
-    "s3://wecc-historical-wx/0_maps/WECC_Informational_MarineCoastal_Boundary_land.shp"
-)
-WECC_MAR = "s3://wecc-historical-wx/0_maps/WECC_Informational_MarineCoastal_Boundary_marine.shp"
+DIRECTORY = f"{BUCKET_NAME}/1_raw_wx/ASOSAWOS/"
 
 # Set state shortcodes
 states = [

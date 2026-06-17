@@ -46,17 +46,15 @@ import pandas as pd
 
 # Optional: Silence pandas' future warnings about regex (not relevant here)
 warnings.filterwarnings(action="ignore", category=FutureWarning)
+import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import calc_clean
 from clean_utils import get_file_paths
+from paths import BUCKET_NAME, WECC_MAR, WECC_TERR
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
-BUCKET_NAME = "wecc-historical-wx"
-WECC_TERR = (
-    "s3://wecc-historical-wx/0_maps/WECC_Informational_MarineCoastal_Boundary_land.shp"
-)
-WECC_MAR = "s3://wecc-historical-wx/0_maps/WECC_Informational_MarineCoastal_Boundary_marine.shp"
 
 
 # Set up directory to save files, if it doesn't already exist.

@@ -52,12 +52,15 @@ except:
     print("Missing config.py file with API token. Make file if necessary.")
     exit()
 
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import calc_clean
 from clean_utils import get_file_paths
+from paths import BUCKET_NAME
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
-BUCKET_NAME = "wecc-historical-wx"
 
 # Set up directory to save files temporarily, if it doesn't already exist.
 os.makedirs("temp", exist_ok=True)
@@ -450,7 +453,7 @@ def clean_madis(
 
         # Get sensor metadata from QA/QC folder
         sensor_filepath = (
-            f"s3://wecc-historical-wx/3_qaqc_wx/{network}/sensorlist_{network}.csv"
+            f"s3://{BUCKET_NAME}/3_qaqc_wx/{network}/sensorlist_{network}.csv"
         )
         sensor_data = pd.read_csv(smart_open.smart_open(sensor_filepath))
 
