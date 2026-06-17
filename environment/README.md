@@ -1,33 +1,46 @@
-# 📦 Setting Up the Conda Environment
+# Setting Up the Environment
 
-This project uses a Conda environment defined in [`environment.yml`](./environment.yml). To set it up, follow these steps:
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management. Dependencies are declared in [`pyproject.toml`](../pyproject.toml).
 
-## 🛠️ 1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/)
-
-You likely already have Conda installed if you have worked with conda environments before. To check that you have Conda installed and available in your terminal:
+## 1. Install uv
 
 ```bash
-conda --version
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-## 📥 2. Create the environment
+## 2. Install system dependencies for geospatial packages
 
-Run the following command from the `environment/` directory of the repository:
+`cartopy` requires GEOS and PROJ:
 
 ```bash
-conda create -n hist-obs -y
+# Ubuntu/Debian
+sudo apt install libgeos-dev libproj-dev
+
+# macOS
+brew install geos proj
 ```
 
-This will create a new (but empty) environment named `hist-obs` 
+## 3. Install project dependencies
 
-## 🧪 3. Activate the environment
+From the repo root:
 
 ```bash
-conda activate hist-obs
+# Runtime deps only
+uv sync
+
+# With dev tools (black, ruff, pre-commit, pytest, etc.)
+uv sync --extra dev
+uv run pre-commit install
 ```
 
-## 🛠️ 4. Install mamba in the environment 
-Mamba is a fast replacement for conda that uses a C++ core for much quicker environment solving and package installation. We recommend using mamba instead of conda to speed up the setup process, especially due to the complexity of the dependency stack for geospatial packages. 
+Or use the Makefile shortcut:
+
+```bash
+make install-dev
+```
+
+The virtual environment is created at `.venv/` and managed automatically by uv.
+
 
 ```bash
 conda install mamba -c conda-forge -y

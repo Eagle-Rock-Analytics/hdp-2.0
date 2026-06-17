@@ -1,0 +1,105 @@
+[project]
+name = "hdp-2.0"
+description = "Historical Data Platform v2 — append-aware pipeline with AWS Batch + Step Functions automation"
+authors = [
+    {name = "Eagle Rock Analytics", email = "info@eaglerockanalytics.com"},
+]
+readme = "README.md"
+requires-python = ">=3.10"
+version = "2.0.0"
+dependencies = [
+    "boto3>=1.24",
+    "cartopy>=0.23",
+    "contextily>=1.2",
+    "dask>=2024.2",
+    "geopandas>=0.11",
+    "h5netcdf>=1.0",
+    "intake>=0.7",
+    "intake-esm>=2023.11",
+    "ipykernel>=6.29",
+    "ipython>=8.18",
+    "jupyterlab>=4.0",
+    "matplotlib>=3.6",
+    "netcdf4>=1.6",
+    "notebook>=7.0",
+    "numpy>=1.26",
+    "openpyxl>=3.0",
+    "pandas>=2.2",
+    "requests>=2.32",
+    "s3fs>=2022.11",
+    "s3transfer>=0.6",
+    "scipy>=1.13",
+    "smart_open>=6.3",
+    "statsmodels>=0.14",
+    "tqdm>=4.66",
+    "xarray>=2023.4",
+    "zarr>=2.18,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.0",
+    "isort>=5.12",
+    "ruff>=0.1",
+    "pre-commit>=3.0",
+    "detect-secrets>=1.4",
+    "nbqa>=1.7",
+    "bandit>=1.7",
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Eagle-Rock-Analytics/hdp-2.0"
+Repository = "https://github.com/Eagle-Rock-Analytics/hdp-2.0"
+Issues = "https://github.com/Eagle-Rock-Analytics/hdp-2.0/issues"
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  \.eggs
+  | \.git
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+lint.select = [
+    "A",   # avoid shadowing builtins
+    "B",   # flake8-bugbear
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8 naming conventions
+    "W",   # pycodestyle warnings
+    "C4",  # flake8-comprehensions
+    "PD",  # pandas best practices
+    "SIM", # simplification
+]
+lint.ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+    "N803",  # argument name should be lowercase (common in scientific code)
+    "N806",  # variable in function should be lowercase (common in scientific code)
+    "PD901", # avoid generic df variable name (too strict for pipeline scripts)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*" = ["S101", "ARG"]
+
+[tool.pytest.ini_options]
+testpaths = ["scripts/tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]

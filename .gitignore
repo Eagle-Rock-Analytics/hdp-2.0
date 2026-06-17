@@ -2,6 +2,15 @@
 */.DS_Store
 .DS_Store
 
+# uv
+.venv/
+uv.lock
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
 # pycache 
 */__pycache/*
 *.pyc
@@ -28,3 +37,8 @@
 */local_qaqced_files
 default_qaqc_log.log
 default_merge_log.log
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
