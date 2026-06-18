@@ -20,3 +20,11 @@ An ASOSAWOS station that has new raw files in S3 since its per-station last time
 
 ## 45-day lag
 Intentional delay in `update_pull.py` — raw data is only pulled up to `today - 45 days` to ensure data finalization from source networks. Means per-station last timestamps and pull boundaries will never reach the present day.
+
+## clean new-slice
+The `.nc` output produced by `ASOSAWOS_clean.py --append` for a single station. Contains only the rows strictly after the boundary timestamp `T` (either `--start-date` or the per-station last timestamp from the baseline zarr). Written to the **staging clean key** rather than the full-history clean key, so the full-history `.nc` is preserved unmodified.
+
+## staging clean key
+The S3 path where a clean new-slice is written during an append run:
+`s3://{HDP_BUCKET}/2_clean_wx/{NETWORK}/_append/{STATION}.nc`
+The `_append` subprefix (constant `CLEAN_APPEND` in `scripts/paths.py`) is a cross-stage contract: the QAQC append stage must read from this key, not from the full-history clean key. Kept separate to allow full-history re-runs without stomping in-flight append slices.

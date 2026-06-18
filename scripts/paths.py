@@ -24,6 +24,7 @@ PUBLISH_PREFIX = os.environ.get("HDP_PUBLISH_PREFIX", "hdp")
 MAPS_DIR = "0_maps"
 RAW_WX = "1_raw_wx"
 CLEAN_WX = "2_clean_wx"
+CLEAN_APPEND = "_append"  # sub-prefix for append-mode new-slice .nc files
 QAQC_WX = "3_qaqc_wx_v2"
 MERGE_WX = "4_merge_wx_v2"
 

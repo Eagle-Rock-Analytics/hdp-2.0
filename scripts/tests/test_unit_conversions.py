@@ -4,6 +4,7 @@ This script runs tests that unit conversions perform as expected.
 To run: type "pytest test_unit_conversions.py" from the command line
 """
 
+import os
 import sys
 
 import pandas as pd
@@ -32,7 +33,10 @@ from calc_clean import (
 
 @pytest.fixture
 def df():
-    return pd.read_csv("../../data/test_dataset.csv")
+    data_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "data", "test_dataset.csv"
+    )
+    return pd.read_csv(data_path)
 
 
 ## -----------------------------------------------------------------------------------------

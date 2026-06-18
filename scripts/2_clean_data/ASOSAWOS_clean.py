@@ -32,6 +32,8 @@ Removed variables are not saved as removedvars.csv, due to the large number of v
 See ISD format document for list of available variables. The QA/QC flag dictionary has been manually formatted and uploaded to the QAQC folder for ASOS/AWOS data.
 """
 
+import argparse
+import csv
 import gzip
 import os
 import re
@@ -43,6 +45,7 @@ from io import StringIO
 import boto3
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 # Optional: Silence pandas' future warnings about regex (not relevant here)
 warnings.filterwarnings(action="ignore", category=FutureWarning)
@@ -52,7 +55,14 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import calc_clean
 from clean_utils import get_file_paths
-from paths import BUCKET_NAME, WECC_MAR, WECC_TERR
+from paths import (
+    BUCKET_NAME,
+    CLEAN_APPEND,
+    PUBLISH_BUCKET,
+    PUBLISH_PREFIX,
+    WECC_MAR,
+    WECC_TERR,
+)
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")  # for lower-level processes
@@ -61,15 +71,11 @@ s3_cl = boto3.client("s3")  # for lower-level processes
 os.makedirs("temp", exist_ok=True)
 
 
-def merge_station_lists(key_asosawos: str, key_isd: str, cleandir: str) -> pd.DataFrame:
+def merge_station_lists(cleandir: str) -> pd.DataFrame:
     """Merges the ASOS/AWOS and ISD station lists.
 
     Parameters
     ----------
-    key_asosawos : str
-        path to ASOSAWOS station file
-    key_isd : str
-        path to ISD station file
     cleandir : str
         path to cleaned data directory
 
@@ -106,6 +112,10 @@ def merge_station_lists(key_asosawos: str, key_isd: str, cleandir: str) -> pd.Da
         asosawos_round, left_on=["WBAN"], right_on=["WBAN"], how="left"
     )
     add_rows = add_rows[~add_rows["NCDCID"].isin(stationlist_join["NCDCID"])]
+    # Convert to object dtype before row-slice assignment to avoid pandas 2.x
+    # Arrow-backed string dtype rejecting float NaN values.
+    stationlist_join = stationlist_join.astype(object)
+    add_rows = add_rows.astype(object)
     stationlist_join[stationlist_join.WBAN.isin(add_rows.WBAN)] = add_rows
 
     # Reorganize
@@ -127,7 +137,64 @@ def merge_station_lists(key_asosawos: str, key_isd: str, cleandir: str) -> pd.Da
     return stationlist_join
 
 
-def clean_asosawos(rawdir: str, cleandir: str):
+def _year_from_filename(key: str) -> int | None:
+    """Extract year from ISD gz S3 key.
+
+    E.g. ``'1_raw_wx/ASOSAWOS/726300-14733-2020.gz'`` → ``2020``.
+    Returns ``None`` if the year cannot be parsed.
+    """
+    try:
+        return int(key.split("/")[-1].replace(".gz", "").split("-")[-1])
+    except (ValueError, IndexError):
+        return None
+
+
+def _year_files_after(subfiles: list[str], T: datetime) -> list[str]:
+    """Return year-files for year(T) and later.
+
+    Includes year(T) itself to capture any data from the partial year that T falls in.
+    """
+    return [f for f in subfiles if (_year_from_filename(f) or 0) >= T.year]
+
+
+def _filter_rows_after(df: pd.DataFrame, T: datetime) -> pd.DataFrame:
+    """Return only rows where time is strictly after T."""
+    return df.loc[df["time"] > T]
+
+
+def _baseline_last_time(station: str) -> datetime | None:
+    """Return the last time coordinate from the baseline merged zarr for *station*.
+
+    Reads from ``s3://{PUBLISH_BUCKET}/{PUBLISH_PREFIX}/ASOSAWOS/{station}.zarr``.
+    Returns ``None`` if the zarr does not exist or has no time data, which causes
+    the caller to fall back to a full-record clean.
+    """
+    zarr_url = f"s3://{PUBLISH_BUCKET}/{PUBLISH_PREFIX}/ASOSAWOS/{station}.zarr"
+    try:
+        ds = xr.open_zarr(zarr_url)
+        last = pd.Timestamp(ds.time.values[-1]).to_pydatetime()
+        ds.close()
+        return last
+    except Exception:
+        return None
+
+
+def _station_name_to_isd_id(station_name: str) -> str:
+    """Convert full station name ``'ASOSAWOS_72630014733'`` to ISD ID ``'726300-14733'``.
+
+    ISD IDs are always 6-digit USAF + hyphen + 5-digit WBAN.
+    """
+    stripped = station_name.replace("ASOSAWOS_", "")
+    return stripped[:6] + "-" + stripped[6:]
+
+
+def clean_asosawos(
+    rawdir: str,
+    cleandir: str,
+    station_ids: list[str] | None = None,
+    append: bool = False,
+    start_date: datetime | None = None,
+) -> None:
     """Clean ASOS/AWOS data.
 
     Parameters
@@ -136,6 +203,16 @@ def clean_asosawos(rawdir: str, cleandir: str):
         path to raw data directory
     cleandir : str
         path to cleaned data directory
+    station_ids : list[str] | None
+        ISD IDs (e.g. ``["726300-14733"]``) to process.  If ``None``, all
+        stations in the station list are processed (whole-network mode).
+    append : bool
+        If ``True``, process only the new time-slice for each station and write
+        output to the ``_append/`` staging key, leaving the full-history ``.nc``
+        untouched.  Non-append behavior is unchanged.
+    start_date : datetime | None
+        Explicit append boundary.  If given, overrides the per-station baseline
+        zarr lookup.  Only used when ``append=True``.
 
     Returns
     -------
@@ -167,11 +244,10 @@ def clean_asosawos(rawdir: str, cleandir: str):
             lonmin, lonmax = -139.047795, -102.03721
             latmin, latmax = 30.142739, 60.003861
 
-        station_file = pd.read_csv(
-            f"s3://{BUCKET_NAME}/2_clean_wx/stationlist_ASOSAWOS_merge.csv"
-        )
-        station_file = merge_station_lists(key_asosawos, key_isd, cleandir)
+        station_file = merge_station_lists(cleandir)
         stations = station_file["ISD-ID"].dropna().astype(str)
+        if station_ids is not None:
+            stations = stations[stations.isin(station_ids)]
 
         # Remove error, station files
         files = [file for file in files if ".gz" in file]
@@ -198,6 +274,22 @@ def clean_asosawos(rawdir: str, cleandir: str):
             station = "ASOSAWOS_" + id.replace("-", "")
             station_metadata = station_file.loc[station_file["ISD-ID"] == id]
             print(f"Parsing: {station}")
+
+            # Append mode: resolve boundary timestamp T and restrict to relevant year-files
+            T = None
+            if append:
+                T = (
+                    start_date
+                    if start_date is not None
+                    else _baseline_last_time(station)
+                )
+                if T is not None:
+                    subfiles = _year_files_after(subfiles, T)
+                    if not subfiles:
+                        print(
+                            f"No new raw files for {station} after {T:%Y-%m-%dT%H:%M}, skipping."
+                        )
+                        continue
 
             # Initialize list of dictionaries.
             data = {
@@ -586,10 +678,20 @@ def clean_asosawos(rawdir: str, cleandir: str):
                     # Drop any empty variables
                     # df = df.dropna(subset=df.columns.difference(['elevation']), axis = 1, how = 'all') # Drop any NA columns except for elevation
 
-                    # TIME FILTER: Remove any rows before Jan 01 1980 and after August 30 2022.
-                    df = df.loc[
-                        (df["time"] < "2022-09-01") & (df["time"] > "1979-12-31")
-                    ]
+                    # TIME FILTER
+                    if append and T is not None:
+                        df = _filter_rows_after(df, T)
+                        if df.empty:
+                            print(
+                                f"No new observations for {station} after "
+                                f"{T:%Y-%m-%dT%H:%M}, skipping."
+                            )
+                            continue
+                    else:
+                        # Full-record: apply original historical time bounds
+                        df = df.loc[
+                            (df["time"] < "2022-09-01") & (df["time"] > "1979-12-31")
+                        ]
 
                     ds = df.to_xarray()
 
@@ -1053,7 +1155,10 @@ def clean_asosawos(rawdir: str, cleandir: str):
                 else:
                     try:
                         filename = station + ".nc"  # Make file name
-                        filepath = cleandir + filename  # Write file path
+                        if append:
+                            filepath = cleandir + CLEAN_APPEND + "/" + filename
+                        else:
+                            filepath = cleandir + filename  # Write file path
 
                         # Write locally
                         ds.to_netcdf(path="temp/temp.nc", engine="netcdf4")
@@ -1087,7 +1192,74 @@ def clean_asosawos(rawdir: str, cleandir: str):
         )
 
 
+def main() -> None:
+    """Command-line entrypoint for ASOSAWOS cleaning."""
+    parser = argparse.ArgumentParser(
+        prog="ASOSAWOS_clean",
+        description=(
+            "Clean ASOS/AWOS raw data and write per-station .nc files. "
+            "Without --station, processes the entire network."
+        ),
+    )
+    parser.add_argument(
+        "-s",
+        "--station",
+        default=None,
+        type=str,
+        help=(
+            "Full station ID to process (e.g. ASOSAWOS_72630014733). "
+            "Omit to process the whole network."
+        ),
+    )
+    parser.add_argument(
+        "--append",
+        action="store_true",
+        default=False,
+        help=(
+            "Process only new timesteps (after the last time in the baseline "
+            "merged zarr) and write output to the _append/ staging key. "
+            "Full-history .nc is not modified."
+        ),
+    )
+    parser.add_argument(
+        "--start-date",
+        dest="start_date",
+        default=None,
+        type=str,
+        help=(
+            "Explicit append boundary as ISO date or datetime "
+            "(e.g. 2022-01-01 or 2022-01-01T00:00:00). "
+            "Overrides the baseline zarr lookup when --append is set."
+        ),
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="Enable verbose output.",
+    )
+
+    args = parser.parse_args()
+    rawdir, cleandir, qaqcdir = get_file_paths("ASOSAWOS")
+
+    station_ids = None
+    if args.station:
+        station_ids = [_station_name_to_isd_id(args.station)]
+
+    start_date = None
+    if args.start_date:
+        start_date = datetime.fromisoformat(args.start_date)
+
+    clean_asosawos(
+        rawdir=rawdir,
+        cleandir=cleandir,
+        station_ids=station_ids,
+        append=args.append,
+        start_date=start_date,
+    )
+
+
 # Run function
 if __name__ == "__main__":
-    rawdir, cleandir, qaqcdir = get_file_paths("ASOSAWOS")
-    clean_asosawos(rawdir, cleandir)
+    main()

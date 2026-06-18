@@ -27,7 +27,10 @@ from calc_clean import (
 
 @pytest.fixture
 def df():
-    return pd.read_csv("../../data/test_dataset.csv")
+    data_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "data", "test_dataset.csv"
+    )
+    return pd.read_csv(data_path)
 
 
 ## -----------------------------------------------------------------------------------------
