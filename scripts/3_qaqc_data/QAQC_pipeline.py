@@ -445,7 +445,7 @@ def process_output_ds(
     if not zarr:  # Upload as netcdf
         s3.Bucket(BUCKET_NAME).upload_file(filename, filepath)
     elif zarr:
-        filepath_s3 = f"s3://{BUCKET_NAME}/{qaqcdir}{filename}"
+        filepath_s3 = f"s3://{BUCKET_NAME}/{filepath}"
 
         # Delete existing zarr store before writing
         # This avoids inconsistencies if there are differences between old vs. new

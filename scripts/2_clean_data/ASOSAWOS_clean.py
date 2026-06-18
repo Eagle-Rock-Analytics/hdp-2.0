@@ -158,8 +158,13 @@ def _year_files_after(subfiles: list[str], T: datetime) -> list[str]:
 
 
 def _filter_rows_after(df: pd.DataFrame, T: datetime) -> pd.DataFrame:
-    """Return only rows where time is strictly after T."""
-    return df.loc[df["time"] > T]
+    """Return only rows from the start of the hour containing T onward.
+
+    This keeps the full boundary hour so downstream hourly standardization does
+    not operate on a partial hour window at the append boundary.
+    """
+    T_floor = pd.Timestamp(T).floor("h").to_pydatetime()
+    return df.loc[df["time"] >= T_floor]
 
 
 def _baseline_last_time(station: str) -> datetime | None:

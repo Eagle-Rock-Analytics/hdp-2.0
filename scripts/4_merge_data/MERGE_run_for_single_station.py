@@ -67,6 +67,15 @@ def main():
         help="Enable verbose output for debugging and logging (default: False).",
         type=bool,
     )
+    parser.add_argument(
+        "--append",
+        action="store_true",
+        help=(
+            "Run in append mode: read the new QAQC slice from "
+            "3_qaqc_wx_v2/{NETWORK}/_append/{STATION}.zarr, merge with existing "
+            "published zarr, and dedup timestamps after concat."
+        ),
+    )
 
     # Parse arguments
     args = parser.parse_args()
@@ -75,6 +84,7 @@ def main():
     run_merge_one_station(
         station=args.station,
         verbose=args.verbose,
+        append=args.append,  # type: ignore[call-arg]
     )
 
 

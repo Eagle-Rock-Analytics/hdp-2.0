@@ -113,18 +113,40 @@ def sample_df():
 
 
 def test_filter_rows_after_basic(sample_df):
-    """Keeps only rows strictly after T."""
+    """Keeps rows from the start of the hour containing T onward."""
     T = datetime(2021, 1, 1)
     result = _filter_rows_after(sample_df, T)
-    assert all(result["time"] > T)
-    assert len(result) == 2  # 2021-06-01 and 2022-01-01
+    assert all(result["time"] >= T)
+    assert len(result) == 3  # 2021-01-01, 2021-06-01, 2022-01-01
 
 
-def test_filter_rows_after_excludes_exact_boundary(sample_df):
-    """The boundary timestamp itself is excluded (strictly after)."""
+def test_filter_rows_after_includes_exact_boundary(sample_df):
+    """The exact boundary timestamp is included."""
     T = datetime(2021, 6, 1)
     result = _filter_rows_after(sample_df, T)
-    assert datetime(2021, 6, 1) not in result["time"].values
+    assert datetime(2021, 6, 1) in result["time"].values
+
+
+def test_filter_rows_after_floors_non_hour_boundary():
+    """A non-hour T includes the full boundary hour (>= floor_hour(T))."""
+    df = pd.DataFrame(
+        {
+            "time": [
+                datetime(2021, 6, 1, 11, 55),
+                datetime(2021, 6, 1, 12, 0),
+                datetime(2021, 6, 1, 12, 5),
+                datetime(2021, 6, 1, 13, 0),
+            ],
+            "tas": [270.0, 271.0, 272.0, 273.0],
+        }
+    )
+    T = datetime(2021, 6, 1, 12, 17)
+    result = _filter_rows_after(df, T)
+    assert list(result["time"]) == [
+        datetime(2021, 6, 1, 12, 0),
+        datetime(2021, 6, 1, 12, 5),
+        datetime(2021, 6, 1, 13, 0),
+    ]
 
 
 def test_filter_rows_after_all_old_returns_empty(sample_df):

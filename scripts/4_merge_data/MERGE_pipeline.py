@@ -48,6 +48,7 @@ from paths import (
     MERGE_WX,
     PUBLISH_BUCKET,
     PUBLISH_PREFIX,
+    QAQC_APPEND,
     QAQC_WX,
     STATIONS_CSV_PATH,
 )
@@ -155,6 +156,56 @@ def read_zarr_dataset(
         raise e
 
     return station_ds
+
+
+def read_append_input_dataset(
+    bucket: str, qaqc_dir: str, network: str, station: str, logger: logging.Logger
+) -> xr.Dataset:
+    """Load append-mode QAQC slice from the staging QAQC key on S3."""
+    s3_uri = f"s3://{bucket}/{qaqc_dir}/{network}/{QAQC_APPEND}/{station}.zarr/"
+    try:
+        station_ds = xr.open_zarr(s3_uri)
+    except Exception as e:
+        logger.error(
+            f"{inspect.currentframe().f_code.co_name}: Could not open append Zarr dataset at {s3_uri}"
+        )
+        raise e
+
+    return station_ds
+
+
+def read_published_merged_dataset(
+    bucket_name: str,
+    merge_dir: str,
+    network: str,
+    station: str,
+    logger: logging.Logger,
+) -> xr.Dataset | None:
+    """Read an existing published merged zarr for append mode, if present."""
+    zarr_s3_path = f"s3://{bucket_name}/{merge_dir}/{network}/{station}.zarr"
+    fs = s3fs.S3FileSystem()
+    if not fs.exists(zarr_s3_path):
+        logger.info(
+            f"No baseline merged zarr found at {zarr_s3_path}; append mode will write a new station zarr."
+        )
+        return None
+
+    try:
+        return xr.open_zarr(zarr_s3_path)
+    except Exception as e:
+        logger.error(
+            f"{inspect.currentframe().f_code.co_name}: Could not open baseline merged zarr at {zarr_s3_path}"
+        )
+        raise e
+
+
+def merge_existing_and_new_slice(
+    existing: xr.Dataset, new_slice: xr.Dataset
+) -> xr.Dataset:
+    """Concat existing and new-slice merged outputs, then dedup/sort on time."""
+    combined = xr.concat([existing, new_slice], dim="time")
+    combined = combined.drop_duplicates(dim="time", keep="last")
+    return combined.sortby("time")
 
 
 def get_var_attrs(
@@ -477,6 +528,7 @@ def write_zarr_to_s3(
 def run_merge_one_station(
     station: str,
     verbose: bool = False,
+    append: bool = False,
 ) -> None:
     """
     Main entry point for running the merge pipeline for a single station.
@@ -487,6 +539,11 @@ def run_merge_one_station(
         Unique identifier for the weather station (e.g., "LOXWFO_CBGC1").
     verbose : bool, optional
         If True, enables verbose logging. Default is False.
+    append : bool, optional
+        If True, read the QAQC append slice from
+        ``s3://{BUCKET_NAME}/{QAQC_WX}/{NETWORK}/{QAQC_APPEND}/{STATION}.zarr``
+        and merge with the existing published zarr using dedup-after-concat.
+        Default is False.
 
     Returns
     -------
@@ -513,7 +570,18 @@ def run_merge_one_station(
         ## ======== READ IN AND REFORMAT DATA ========
 
         # Load Zarr dataset from S3
-        ds = read_zarr_dataset(BUCKET_NAME, QAQC_WX, network_name, station, logger)
+        if append:
+            ds = read_append_input_dataset(
+                BUCKET_NAME, QAQC_WX, network_name, station, logger
+            )
+        else:
+            ds = read_zarr_dataset(BUCKET_NAME, QAQC_WX, network_name, station, logger)
+
+        if append and ds.sizes.get("time", 0) == 0:
+            logger.info(
+                "Append input slice has zero rows. Skipping merge write and leaving baseline zarr unchanged."
+            )
+            return
 
         # Get variable attributes from dataset
         var_attrs = get_var_attrs(ds, network_name, logger)
@@ -525,7 +593,12 @@ def run_merge_one_station(
 
         # Part 1: Construct and export table of raw QAQC counts per variable
         # For success report
-        eraqc_counts_native_timestep(df, network_name, station, logger)
+        if append:
+            logger.info(
+                "Append mode: skipping eraqc_counts_native_timestep to avoid overwriting full-record success-report CSVs with slice-only counts."
+            )
+        else:
+            eraqc_counts_native_timestep(df, network_name, station, logger)
 
         # Part 2: Derive any missing variables
         df, var_attrs = merge_derive_missing_vars(df, var_attrs, logger)
@@ -534,7 +607,12 @@ def run_merge_one_station(
         df, var_attrs = merge_hourly_standardization(df, var_attrs, logger)
 
         # Part 3b: Construct and export table of raw QAQC counts per variable post-hourly standardization
-        eraqc_counts_hourly_timestep(df, network_name, station, logger)
+        if append:
+            logger.info(
+                "Append mode: skipping eraqc_counts_hourly_timestep to avoid overwriting full-record success-report CSVs with slice-only counts."
+            )
+        else:
+            eraqc_counts_hourly_timestep(df, network_name, station, logger)
 
         # Part 4: Filter columns to remove unwanted variables
         df = filter_columns(df, logger)
@@ -551,8 +629,23 @@ def run_merge_one_station(
         ds_merged = set_ds_chunks(ds_merged, logger)
 
         # Write the xarray Dataset as a Zarr file to the specified S3 path
+        if append:
+            ds_existing = read_published_merged_dataset(
+                PUBLISH_BUCKET, PUBLISH_PREFIX, network_name, station, logger
+            )
+            if ds_existing is None:
+                logger.info(
+                    "Append mode baseline missing; writing merged slice as first published station zarr."
+                )
+                ds_to_write = ds_merged
+            else:
+                ds_to_write = merge_existing_and_new_slice(ds_existing, ds_merged)
+                ds_existing.close()
+        else:
+            ds_to_write = ds_merged
+
         write_zarr_to_s3(
-            ds_merged, PUBLISH_BUCKET, PUBLISH_PREFIX, network_name, station, logger
+            ds_to_write, PUBLISH_BUCKET, PUBLISH_PREFIX, network_name, station, logger
         )
 
         # Done! Print elapsed time
