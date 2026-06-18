@@ -34,7 +34,17 @@ import s3fs
 import xarray as xr
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME, CLEAN_WX, MERGE_WX, QAQC_WX, RAW_WX, STATIONS_CSV_PATH
+from paths import (
+    BUCKET_NAME,
+    CLEAN_APPEND,
+    CLEAN_WX,
+    MERGE_WX,
+    QAQC_APPEND,
+    QAQC_WX,
+    RAW_WX,
+    SOURCE_BUCKET,
+    STATIONS_CSV_PATH,
+)
 
 try:
     from log_config import setup_logger
@@ -61,6 +71,89 @@ dirs = ["./qaqc_logs/"]
 for d in dirs:
     if not os.path.exists(d):
         os.makedirs(d)
+
+
+# ---------------------------------------------------------------------------
+# Append-mode helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_fit_context(
+    history_df: pd.DataFrame, slice_df: pd.DataFrame
+) -> pd.DataFrame:
+    """Combine a full-history DataFrame with a new slice for climatological fitting.
+
+    History rows that overlap the slice are dropped (keep slice rows for those
+    timestamps to avoid duplication). The result is sorted by time and suitable
+    as the ``fit_df`` argument for the two climatological checks.
+
+    Parameters
+    ----------
+    history_df : pd.DataFrame
+        Full-history df from ``qaqc_ds_to_df`` (all ``_eraqc`` cols are NaN).
+    slice_df : pd.DataFrame
+        New-slice df from ``qaqc_ds_to_df``.  Must contain a ``time`` column.
+
+    Returns
+    -------
+    pd.DataFrame
+        Combined DataFrame sorted by time with no duplicate timestamps.
+    """
+    slice_times = set(slice_df["time"])
+    history_trimmed = history_df[~history_df["time"].isin(slice_times)].copy()
+    combined = pd.concat([history_trimmed, slice_df], ignore_index=True)
+    combined = combined.sort_values("time").reset_index(drop=True)
+    return combined
+
+
+def _transfer_climatological_flags(
+    slice_df: pd.DataFrame,
+    flagged_combined: pd.DataFrame,
+) -> pd.DataFrame:
+    """Copy climatological flags from a combined DataFrame back to the slice.
+
+    For every ``*_eraqc`` column, updates slice rows with flag values from
+    ``flagged_combined`` where those values are non-NaN, leaving already-set
+    flags in ``slice_df`` unchanged if ``flagged_combined`` has NaN for that
+    cell.
+
+    Parameters
+    ----------
+    slice_df : pd.DataFrame
+        New-slice df that has already been processed by all per-row checks.
+    flagged_combined : pd.DataFrame
+        Full-record df after running the climatological checks.  Must have a
+        ``time`` column aligned with ``slice_df``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Updated slice_df with climatological flags merged in.
+    """
+    eraqc_cols = [c for c in flagged_combined.columns if c.endswith("_eraqc")]
+    # Only transfer columns that exist in both frames
+    eraqc_cols = [c for c in eraqc_cols if c in slice_df.columns]
+
+    slice_times = slice_df["time"].values
+    combined_slice_rows = flagged_combined[
+        flagged_combined["time"].isin(slice_times)
+    ].copy()
+
+    result = slice_df.copy()
+    for col in eraqc_cols:
+        if col not in combined_slice_rows.columns:
+            continue
+        # Build time -> flag mapping from combined (for slice timestamps only)
+        flag_map = combined_slice_rows.set_index("time")[col]
+        mapped = result["time"].map(flag_map)
+        # Only overwrite where combined produced a non-NaN flag value
+        mask = mapped.notna()
+        result.loc[mask, col] = mapped[mask]
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 
 
 def setup_error_handling() -> tuple[dict[str, list], str, str]:
@@ -259,6 +352,7 @@ def process_output_ds(
     station: str,
     qaqcdir: str,
     zarr: bool,
+    append: bool = False,
 ):
     """
     Processes the final dataset for export to AWS.
@@ -281,6 +375,10 @@ def process_output_ds(
         path to QAQC AWS directory
     zarr : bool
         if True, output is a .zarr. if False, output is a .nc
+    append : bool, optional
+        If True, write the new-slice zarr to the staging QAQC key
+        ``{qaqcdir}{QAQC_APPEND}/{station}.zarr`` rather than the full-history
+        path.  The full-history zarr is left untouched.  Default False.
 
     Returns
     -------
@@ -333,7 +431,11 @@ def process_output_ds(
         filename = station + ".nc"  # Make file name
     elif zarr:
         filename = station + ".zarr"
-    filepath = qaqcdir + filename  # Writes file path
+    # Append mode: write to staging QAQC key; full-history zarr is left untouched
+    if append:
+        filepath = qaqcdir + QAQC_APPEND + "/" + filename
+    else:
+        filepath = qaqcdir + filename  # Writes file path
 
     # Push file to AWS with correct file name
     t0 = time.time()
@@ -512,6 +614,8 @@ def run_qaqc_pipeline(
     station: str,
     end_api: datetime.datetime,
     rad_scheme: str,
+    append: bool = False,
+    fit_df: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, list[str], list[str], list[str]]:
     """
     Runs all QAQC functions.
@@ -530,6 +634,15 @@ def run_qaqc_pipeline(
         time at beginnging of data download
     rad_scheme : str
         radiation handling scheme for qaqc_frequent
+    append : bool, optional
+        If True, run in append mode.  The two climatological checks are run on
+        the combined full-record ``fit_df`` and only slice-timestamp flags are
+        transferred back.  Default False.
+    fit_df : pd.DataFrame or None, optional
+        Full-record DataFrame (``qaqc_ds_to_df`` format) used as the
+        climatological fit context when ``append=True``.  Ignored when
+        ``append=False``.  If None while ``append=True``, falls back to
+        single-frame behaviour for those two checks.
 
     Returns
     -------
@@ -877,18 +990,34 @@ def run_qaqc_pipeline(
     t0 = time.time()
     logger.info("QA/QC unusual gaps")
 
-    new_df = qaqc_unusual_gaps(stn_to_qaqc)
-    if new_df is None:
-        errors = print_qaqc_failed(
-            errors,
-            station,
-            end_api,
-            message="Flagging problem with unusual gap distribution function",
-            test="qaqc_unusual_gaps",
-        )
+    if append and fit_df is not None:
+        # True-append: fit distribution on full record, transfer slice flags back
+        combined_for_gaps = _build_fit_context(fit_df, stn_to_qaqc)
+        combined_flagged = qaqc_unusual_gaps(combined_for_gaps)
+        if combined_flagged is None:
+            errors = print_qaqc_failed(
+                errors,
+                station,
+                end_api,
+                message="Flagging problem with unusual gap distribution function",
+                test="qaqc_unusual_gaps",
+            )
+        else:
+            stn_to_qaqc = _transfer_climatological_flags(stn_to_qaqc, combined_flagged)
+            logger.info("pass qaqc_unusual_gaps (append: fit-on-full, flag-on-slice)")
     else:
-        stn_to_qaqc = new_df
-        logger.info("pass qaqc_unusual_gaps")
+        new_df = qaqc_unusual_gaps(stn_to_qaqc)
+        if new_df is None:
+            errors = print_qaqc_failed(
+                errors,
+                station,
+                end_api,
+                message="Flagging problem with unusual gap distribution function",
+                test="qaqc_unusual_gaps",
+            )
+        else:
+            stn_to_qaqc = new_df
+            logger.info("pass qaqc_unusual_gaps")
 
     ttime = time.time() - t0
     logger.info(f"Done QA/QC unusual gaps, Ellapsed time: {ttime:.2f} s.\n")
@@ -898,20 +1027,38 @@ def run_qaqc_pipeline(
     t0 = time.time()
     logger.info("QA/QC climatological outliers")
 
-    new_df = qaqc_climatological_outlier(stn_to_qaqc)
-    if new_df is None:
-        errors = print_qaqc_failed(
-            errors,
-            station,
-            end_api,
-            message="Flagging problem with climatological outlier check",
-            test="qaqc_climatological_outlier",
-        )
+    if append and fit_df is not None:
+        # True-append: fit climatology on full record, transfer slice flags back
+        combined_for_clim = _build_fit_context(fit_df, stn_to_qaqc)
+        combined_flagged = qaqc_climatological_outlier(combined_for_clim)
+        if combined_flagged is None:
+            errors = print_qaqc_failed(
+                errors,
+                station,
+                end_api,
+                message="Flagging problem with climatological outlier check",
+                test="qaqc_climatological_outlier",
+            )
+        else:
+            stn_to_qaqc = _transfer_climatological_flags(stn_to_qaqc, combined_flagged)
+            logger.info(
+                "pass qaqc_climatological_outlier (append: fit-on-full, flag-on-slice)"
+            )
     else:
-        stn_to_qaqc = new_df
-        logger.info(
-            "pass qaqc_climatological_outlier",
-        )
+        new_df = qaqc_climatological_outlier(stn_to_qaqc)
+        if new_df is None:
+            errors = print_qaqc_failed(
+                errors,
+                station,
+                end_api,
+                message="Flagging problem with climatological outlier check",
+                test="qaqc_climatological_outlier",
+            )
+        else:
+            stn_to_qaqc = new_df
+            logger.info(
+                "pass qaqc_climatological_outlier",
+            )
 
     ttime = time.time() - t0
     logger.info(f"Done QA/QC climatological outliers, Ellapsed time: {ttime:.2f} s.\n")
@@ -983,7 +1130,10 @@ def run_qaqc_pipeline(
 
 
 def run_qaqc_one_station(
-    station: str, verbose: bool = False, rad_scheme: str = "remove_zeros"
+    station: str,
+    verbose: bool = False,
+    rad_scheme: str = "remove_zeros",
+    append: bool = False,
 ):
     """
     Runs the full QA/QC pipeline on a single weather station dataset.
@@ -1001,6 +1151,18 @@ def run_qaqc_one_station(
         If True, enables verbose logging. Default is False.
     rad_scheme : str, optional
         Strategy for handling solar radiation data. Default is "remove_zeros".
+    append : bool, optional
+        If True, run in append mode:
+        - reads the new clean slice from the staging clean key
+          ``s3://{BUCKET_NAME}/{cleandir}{CLEAN_APPEND}/{station}.nc``.
+        - reads the full clean history from
+          ``s3://{SOURCE_BUCKET}/{cleandir}{station}.nc`` for climatological
+          fitting.
+        - writes the QAQC'd slice to the staging QAQC key
+          ``s3://{BUCKET_NAME}/{qaqcdir}{QAQC_APPEND}/{station}.zarr``.
+        If the full history cannot be read, falls back to full reprocess with
+        a warning and ``append=False`` behaviour for those checks.
+        Default False.
 
     Returns
     -------
@@ -1043,16 +1205,22 @@ def run_qaqc_one_station(
     # Create an s3fs filesystem object
     fs = s3fs.S3FileSystem()
 
-    # Define path to file using correct file extension
-    aws_url_no_extension = f"s3://{BUCKET_NAME}/{cleaned_data_dir}{station}"
-    aws_url = aws_url_no_extension + ".zarr" if zarr else aws_url_no_extension + ".nc"
+    if append:
+        # --append: read new slice from staging clean key (working bucket)
+        aws_url = f"s3://{BUCKET_NAME}/{cleaned_data_dir}{CLEAN_APPEND}/{station}.nc"
+    else:
+        # Normal: read from full-history clean key (working bucket)
+        aws_url_no_extension = f"s3://{BUCKET_NAME}/{cleaned_data_dir}{station}"
+        aws_url = (
+            aws_url_no_extension + ".zarr" if zarr else aws_url_no_extension + ".nc"
+        )
 
     # Open the file
     logger.info(f"Opening file from AWS S3: {aws_url}")
     try:
-        if zarr:  # Open zarr
+        if zarr and not append:  # zarr-format clean input (CW3E / VALLEYWATER)
             ds = xr.open_zarr(aws_url)
-        else:  # Open netcdf
+        else:  # netcdf (ASOSAWOS, most networks)
             with fs.open(aws_url) as fileObj:
                 logger.info("File opened successfully. Reading dataset...")
                 ds = xr.open_dataset(fileObj)
@@ -1067,6 +1235,33 @@ def run_qaqc_one_station(
     logger.info(
         f"Done reading. Ellapsed time: {time.time() - t0} s.\n",
     )
+
+    # --append: build fit_df from full clean history (source bucket)
+    fit_df = None
+    if append:
+        history_url = f"s3://{SOURCE_BUCKET}/{cleaned_data_dir}{station}.nc"
+        logger.info(f"Append mode: reading full clean history from {history_url}")
+        try:
+            with fs.open(history_url) as fileObj:
+                ds_history = xr.open_dataset(fileObj)
+                ds_history = ds_history.load()
+            ds_history = ds_history.drop_duplicates(dim="time")
+            ds_history = qaqc_eligible_vars(ds_history)
+            if ds_history is not None:
+                fit_df_raw, _, _, _, _ = qaqc_ds_to_df(ds_history)
+                fit_df = fit_df_raw
+                ds_history.close()
+                logger.info("Full clean history loaded for climatological fitting.")
+            else:
+                logger.warning(
+                    f"Full clean history at {history_url} has no eligible vars. "
+                    "Falling back to single-frame climatological checks."
+                )
+        except Exception as e:
+            logger.warning(
+                f"Could not read full clean history from {history_url}: {e}. "
+                "Falling back to single-frame climatological checks."
+            )
 
     ## ======== MANUAL PREPROCESSING =========
 
@@ -1101,6 +1296,8 @@ def run_qaqc_one_station(
             station,
             end_api,
             rad_scheme,
+            append=append,
+            fit_df=fit_df,
         )
         if df is None:
             # No data is returned by qaqc_pipeline
@@ -1121,6 +1318,7 @@ def run_qaqc_one_station(
             station,
             qaqc_dir,
             zarr=True,  # Default to always write to zarr
+            append=append,
         )
 
     except Exception as e:

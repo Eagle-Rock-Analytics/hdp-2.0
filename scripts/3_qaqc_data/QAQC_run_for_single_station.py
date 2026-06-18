@@ -78,6 +78,17 @@ def main():
         help="Enable verbose output for debugging and logging (default: False).",
         type=bool,
     )
+    parser.add_argument(
+        "--append",
+        action="store_true",
+        default=False,
+        help=(
+            "Run in append mode: read new slice from staging clean key "
+            "(2_clean_wx/{NETWORK}/_append/{STATION}.nc), fit climatological "
+            "checks on full clean history, write QAQC'd slice to staging QAQC "
+            "key (3_qaqc_wx_v2/{NETWORK}/_append/{STATION}.zarr)."
+        ),
+    )
 
     # Parse arguments
     args = parser.parse_args()
@@ -87,6 +98,7 @@ def main():
         station=args.station,
         verbose=args.verbose,
         rad_scheme=args.rad_scheme,
+        append=args.append,
     )
 
 

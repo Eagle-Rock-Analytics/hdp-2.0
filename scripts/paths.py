@@ -7,6 +7,7 @@ so the pipeline can be redirected without code changes.
 Environment variables
 ---------------------
 HDP_BUCKET          : intermediate/staging bucket (default: wecc-historical-wx)
+HDP_SOURCE_BUCKET   : full-history read bucket for append mode (default: HDP_BUCKET)
 HDP_PUBLISH_BUCKET  : output publish bucket (default: cadcat)
 HDP_PUBLISH_PREFIX  : prefix within publish bucket (default: hdp)
 """
@@ -15,6 +16,12 @@ import os
 
 # Staging / intermediate bucket (pull, clean, qaqc intermediates)
 BUCKET_NAME = os.environ.get("HDP_BUCKET", "wecc-historical-wx")
+
+# Full-history source bucket for append mode. Append runs read the existing
+# full-record clean data from here (typically production wecc-historical-wx)
+# while writing the new slice/output to BUCKET_NAME (which may be a test bucket).
+# Defaults to BUCKET_NAME so non-append and same-bucket workflows are unchanged.
+SOURCE_BUCKET = os.environ.get("HDP_SOURCE_BUCKET", BUCKET_NAME)
 
 # Publish bucket (merge output: s3://{PUBLISH_BUCKET}/{PUBLISH_PREFIX}/{NETWORK}/{STATION}.zarr)
 PUBLISH_BUCKET = os.environ.get("HDP_PUBLISH_BUCKET", "cadcat")
@@ -26,6 +33,7 @@ RAW_WX = "1_raw_wx"
 CLEAN_WX = "2_clean_wx"
 CLEAN_APPEND = "_append"  # sub-prefix for append-mode new-slice .nc files
 QAQC_WX = "3_qaqc_wx_v2"
+QAQC_APPEND = "_append"  # sub-prefix for append-mode new-slice QAQC .zarr stores
 MERGE_WX = "4_merge_wx_v2"
 
 # Commonly used full S3 URIs
