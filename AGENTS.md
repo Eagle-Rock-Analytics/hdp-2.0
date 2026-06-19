@@ -151,6 +151,43 @@ The dominant cost lever for Phase 2 automation is limiting reprocessing to only 
 
 ---
 
+## Data Source Status — ISD Freeze and GHCNh Migration
+
+### ISD is frozen (no 2026 data)
+As of early October 2025, **both NOAA ISD access paths stopped being updated**:
+- FTP (`ftp.ncdc.noaa.gov/pub/data/noaa/`): last update 2025-08-29; no `2026/` directory
+- HTTPS (`https://www.ncei.noaa.gov/data/global-hourly/`): last update 2025-10-02; no `2026/` directory
+
+Do not attempt to pull ASOSAWOS or OtherISD data from these sources for dates after ~October 2025.
+
+### GHCNh is the ISD replacement
+NOAA's **Global Historical Climatology Network — Hourly (GHCNh)** is the official
+ISD successor. It is actively updated (data lag ~10 days) and covers **1718–2026**.
+See `CONTEXT.md` for full technical details. Key facts for pipeline work:
+
+**Access URL:**
+```
+https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/access/by-year/{YEAR}/parquet/GHCNh_{STATION}_{YEAR}.parquet
+```
+Files are **Parquet** (not ISD fixed-width gzip). Read with `pd.read_parquet()`.
+
+**Station ID conversion** (ISD → GHCNh):
+```python
+# ASOSAWOS_72630014733  →  USW00014733
+wban = hdp_station_id.replace("ASOSAWOS_", "")[6:]  # last 5 digits
+ghcnh_id = f"USW{int(wban):08d}"
+```
+
+**WECC coverage:** 94.9% of ISD stations are in GHCNh. All 63 missing are
+decommissioned pre-2000 stations; no active ASOS/AWOS station is absent.
+
+**New pull script needed:** `scripts/1_pull_data/GHCNh_pull.py` — does not exist
+yet. The existing `ASOSAWOS_pullftp.py` / `OtherISD_pull.py` ISD FTP approach
+cannot be extended to cover 2026+ data. A GHCNh pull must be written to fetch
+Parquet files by station and year from the NCEI endpoint.
+
+---
+
 ## Gotchas
 
 - **`qaqc_concatenate_stations.py` is one-time only** — it deletes original input stations from S3 after merging co-located ASOSAWOS/MARITIME records. Re-running will fail unless originals are regenerated.

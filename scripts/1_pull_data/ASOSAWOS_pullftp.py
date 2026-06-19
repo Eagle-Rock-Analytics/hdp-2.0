@@ -27,6 +27,7 @@ See https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.htm
 
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from ftplib import FTP
 from io import BytesIO, StringIO
@@ -45,6 +46,11 @@ from paths import BUCKET_NAME, WECC_MAR, WECC_TERR
 
 s3 = boto3.client("s3")
 DIRECTORY = f"{BUCKET_NAME}/1_raw_wx/ASOSAWOS/"
+
+FTP_TIMEOUT_SECONDS = 120
+FTP_RETRY_ATTEMPTS = 3
+FTP_RETRY_SLEEP_SECONDS = 5
+HEARTBEAT_INTERVAL_SECONDS = 30
 
 # Set state shortcodes
 states = [
@@ -100,6 +106,21 @@ states = [
     "WV",
     "WY",
 ]
+
+
+def _retry_ftp_call(action: str, func, *args, **kwargs):
+    """Retry wrapper for transient FTP/network operations."""
+    for attempt in range(1, FTP_RETRY_ATTEMPTS + 1):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            if attempt == FTP_RETRY_ATTEMPTS:
+                raise
+            print(
+                f"{action} failed (attempt {attempt}/{FTP_RETRY_ATTEMPTS}): {exc}; "
+                f"retrying in {FTP_RETRY_SLEEP_SECONDS}s"
+            )
+            time.sleep(FTP_RETRY_SLEEP_SECONDS)
 
 
 def get_asosawos_stations() -> pd.DataFrame:
@@ -288,13 +309,18 @@ def get_wecc_stations(terrpath: str, marpath: str) -> pd.DataFrame:
 
     # using ftplib, get list of stations as csv
     filename = "isd-history.csv"
-    ftp = FTP("ftp.ncdc.noaa.gov")
-    ftp.login()  # user anonymous, password anonymous
-    ftp.cwd("pub/data/noaa/")  # Change WD
+    print(
+        f"Connecting to ftp.ncdc.noaa.gov for station metadata (timeout={FTP_TIMEOUT_SECONDS}s)"
+    )
+    ftp = FTP("ftp.ncdc.noaa.gov", timeout=FTP_TIMEOUT_SECONDS)
+    _retry_ftp_call("FTP login", ftp.login)  # user anonymous, password anonymous
+    _retry_ftp_call("FTP cwd pub/data/noaa", ftp.cwd, "pub/data/noaa/")
 
     # Read in ISD stations
     r = BytesIO()
-    ftp.retrbinary("RETR " + filename, r.write)
+    _retry_ftp_call(
+        "FTP RETR isd-history.csv", ftp.retrbinary, "RETR " + filename, r.write
+    )
     r.seek(0)
 
     # Read in csv and only filter to include US stations
@@ -402,6 +428,7 @@ def get_asosawos_data_ftp(
     station_list: pd.DataFrame,
     directory: str,
     start_date: str | None = None,
+    end_date: str | None = None,
     get_all: bool = True,
 ):
     """
@@ -416,6 +443,9 @@ def get_asosawos_data_ftp(
         folder path within bucket
     start-date : str
         optional cutoff date in 'YYYY-MM-DD' format
+    end-date : str
+        optional upper date bound in 'YYYY-MM-DD' format. Year folders after
+        this date are skipped.
     get_all : bool
         only download files whose last edit date is newer than recent files downloaded in the save folder. Only use to update a complete set of files.
 
@@ -429,18 +459,25 @@ def get_asosawos_data_ftp(
     # Set end time to be current time at beginning of download
     end_api = datetime.now().strftime("%Y%m%d%H%M")
 
+    print(
+        f"Connecting to ftp.ncdc.noaa.gov (timeout={FTP_TIMEOUT_SECONDS}s, retries={FTP_RETRY_ATTEMPTS})"
+    )
     # Login using ftplib
-    ftp = FTP("ftp.ncdc.noaa.gov")
-    ftp.login()  # user anonymous, password anonymous
-    ftp.cwd("pub/data/noaa")  # Change WD
+    ftp = FTP("ftp.ncdc.noaa.gov", timeout=FTP_TIMEOUT_SECONDS)
+    _retry_ftp_call("FTP login", ftp.login)  # user anonymous, password anonymous
+    _retry_ftp_call("FTP cwd pub/data/noaa", ftp.cwd, "pub/data/noaa")
     pwd = ftp.pwd()  # Get base file path
 
     # Get list of folders (by year) in main FTP folder
-    years = ftp.nlst()
+    years = _retry_ftp_call("FTP list year directories", ftp.nlst)
+    print(f"Found {len(years)} top-level entries in ftp year directory listing")
 
     # If no start date specified, manually set to be Jan 01 1980
     if start_date is None:
         start_date = "1980-01-01"
+
+    start_year = int(start_date[0:4]) if start_date is not None else 1980
+    end_year = int(end_date[0:4]) if end_date is not None else None
 
     # Remove depracated stations if filtering by time
     if start_date is not None:
@@ -470,55 +507,98 @@ def get_asosawos_data_ftp(
         get_all = True
 
     # For each year / folder
+    total_files_planned = 0
+    total_files_saved = 0
     for i in years:
         # If folder is the name of a year (and not metadata file)
         if len(i) < 5:
-            # If no start date specified or year of folder is within start date range, download folder
-            if (
-                start_date is not None and int(i) >= int(start_date[0:4])
-            ) or start_date is None:
-                ftp.cwd(pwd)
-                ftp.cwd(i)
+            year_i = int(i)
+            # Keep year folders within [start_year, end_year] where end_year is optional.
+            if year_i >= start_year and (end_year is None or year_i <= end_year):
+                print(f"Entering year folder {i}")
+                _retry_ftp_call(f"FTP cwd base before entering {i}", ftp.cwd, pwd)
+                _retry_ftp_call(f"FTP cwd {i}", ftp.cwd, i)
 
                 # Get list of all file names in folder
-                filenames = ftp.nlst()
+                filenames = _retry_ftp_call(f"FTP list files for year {i}", ftp.nlst)
                 # Reformat station IDs to match file names
                 filefiltlist = station_list["ISD-ID"] + "-" + i + ".gz"
                 filefiltlist = filefiltlist.tolist()
 
                 # Only pull all file names that are contained in station_list ID column
                 fileswecc = [x for x in filenames if x in filefiltlist]
+                total_files_planned += len(fileswecc)
+                print(f"Year {i}: matched station files={len(fileswecc)}")
 
-                for filename in fileswecc:
-                    # Returns time modified (in UTC)
-                    modifiedTime = ftp.sendcmd("MDTM " + filename)[4:].strip()
-                    modifiedTime = datetime.strptime(
-                        modifiedTime, "%Y%m%d%H%M%S"
-                    ).replace(tzinfo=timezone.utc)
+                if len(fileswecc) == 0:
+                    print(f"Year {i}: no matching files to process")
+                    continue
 
-                # If get_all is False, only download files whose last edit date has changed since the last download or whose filename is not in the folder
-                if not get_all:
-                    # If filename already in saved bucket
+                heartbeat_start = time.monotonic()
+
+                for idx, filename in enumerate(fileswecc, start=1):
                     try:
-                        if filename in alreadysaved:
-                            # If file new since last run-through, write to folder
-                            if modifiedTime > last_edit_time:
-                                ftp_to_aws(ftp, filename, directory)
+                        now = time.monotonic()
+                        if now - heartbeat_start >= HEARTBEAT_INTERVAL_SECONDS:
+                            print(
+                                f"Heartbeat: year {i}, progress {idx - 1}/{len(fileswecc)}, "
+                                f"saved_total={total_files_saved}"
+                            )
+                            heartbeat_start = now
+
+                        print(f"Processing {filename} ({idx}/{len(fileswecc)})")
+
+                        # Returns time modified (in UTC)
+                        modified_reply = _retry_ftp_call(
+                            f"FTP MDTM {filename}", ftp.sendcmd, "MDTM " + filename
+                        )
+                        modifiedTime = modified_reply[4:].strip()
+                        modifiedTime = datetime.strptime(
+                            modifiedTime, "%Y%m%d%H%M%S"
+                        ).replace(tzinfo=timezone.utc)
+
+                        # If get_all is False, only download files whose last edit date has
+                        # changed since the last download or whose filename is not in the folder.
+                        if not get_all:
+                            if filename in alreadysaved:
+                                if modifiedTime > last_edit_time:
+                                    _retry_ftp_call(
+                                        f"FTP download/upload {filename}",
+                                        ftp_to_aws,
+                                        ftp,
+                                        filename,
+                                        directory,
+                                    )
+                                    total_files_saved += 1
+                                else:
+                                    print(f"{filename} already saved")
                             else:
-                                print(f"{filename} already saved")
+                                _retry_ftp_call(
+                                    f"FTP download/upload {filename}",
+                                    ftp_to_aws,
+                                    ftp,
+                                    filename,
+                                    directory,
+                                )
+                                total_files_saved += 1
                         else:
-                            ftp_to_aws(ftp, filename, directory)
+                            # If get_all is true, download all files in folder.
+                            _retry_ftp_call(
+                                f"FTP download/upload {filename}",
+                                ftp_to_aws,
+                                ftp,
+                                filename,
+                                directory,
+                            )
+                            total_files_saved += 1
 
                     except Exception as e:
-                        print(f"Error in downloading date {i}: {e}")
+                        print(f"Error downloading {filename} in year {i}: {e}")
                         errors["Date"].append(i)
                         errors["Time"].append(end_api)
                         errors["Error"].append(e)
-                        # Adds error handling in case of missing folder. Skip to next folder
+                        # Continue with remaining files in this year bucket.
                         continue
-                else:
-                    # If get_all is true, download all files in folder.
-                    ftp_to_aws(ftp, filename, directory)
 
             else:
                 # If year of folder not in start date range, skip folder
@@ -529,6 +609,10 @@ def get_asosawos_data_ftp(
             continue
 
     # close connection
+    print(
+        "FTP pull summary: "
+        f"planned_files={total_files_planned}, saved_files={total_files_saved}, errors={len(errors['Error'])}"
+    )
     ftp.quit()
 
     # Write errors to csv
