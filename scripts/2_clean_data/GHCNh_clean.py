@@ -143,8 +143,10 @@ def _keys_from_year(keys: list[str], start_year: int) -> list[str]:
 
 def _read_parquet_from_s3(bucket: str, key: str) -> pd.DataFrame:
     """Download and read a Parquet file from S3 into a DataFrame."""
+    import io
+
     obj = s3_cl.get_object(Bucket=bucket, Key=key)
-    return pd.read_parquet(obj["Body"])
+    return pd.read_parquet(io.BytesIO(obj["Body"].read()))
 
 
 # ---------------------------------------------------------------------------
@@ -556,9 +558,9 @@ def clean_ghcnh(
             # Write to S3
             filename = f"{station_id}.nc"
             if append:
-                filepath = f"{cleandir.rstrip('/')}{CLEAN_APPEND}/{filename}"
+                filepath = f"{cleandir}{CLEAN_APPEND}/{filename}"
             else:
-                filepath = f"{cleandir.rstrip('/')}/{filename}"
+                filepath = f"{cleandir}{filename}"
 
             ds.to_netcdf(path="temp/temp_ghcnh.nc", engine="netcdf4")
             s3.Bucket(bucket).upload_file("temp/temp_ghcnh.nc", filepath)
