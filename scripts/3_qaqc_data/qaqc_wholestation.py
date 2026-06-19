@@ -872,7 +872,7 @@ def flag_summary(df: pd.DataFrame):
         unique_flags = df[var].unique()
         logger.info(f"Flags set on {var}: {unique_flags}")  # unique flag values
         df_len = len(df)
-        df_false = len(df.loc[(not df[var].isnull())])
+        df_false = len(df.loc[~df[var].isnull()])
         df_per = round((df_false / df_len) * 100, 3)
         logger.info(
             f"Coverage of {var} obs flagged: {df_false} of {df_len} obs ({df_per}%)"

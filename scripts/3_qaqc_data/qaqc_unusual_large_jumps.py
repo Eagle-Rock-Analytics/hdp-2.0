@@ -262,7 +262,7 @@ def detect_spikes(
 
     # Group by month to avoid strong seasonal cycle
     # grouped = df.groupby([pd.Grouper(freq='M'), df['hours_diff']])
-    grouped = df.groupby(pd.Grouper(freq="M"))
+    grouped = df.groupby(pd.Grouper(freq="ME"))
 
     # Count number of data per month
     counts = grouped[var + "_difference"].transform("count")
