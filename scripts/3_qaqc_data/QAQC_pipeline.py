@@ -514,6 +514,7 @@ def qaqc_ds_to_df(
         "lat",
         "lon",
         "qaqc_process",
+        "qaqc_source",
         "sfcWind_method",
         "pr_duration",
         "pr_depth",
