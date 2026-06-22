@@ -562,8 +562,9 @@ def clean_ghcnh(
             else:
                 filepath = f"{cleandir}{filename}"
 
-            ds.to_netcdf(path="temp/temp_ghcnh.nc", engine="netcdf4")
-            s3.Bucket(bucket).upload_file("temp/temp_ghcnh.nc", filepath)
+            ds.to_netcdf(path=f"temp/temp_ghcnh_{station_id}.nc", engine="netcdf4")
+            s3.Bucket(bucket).upload_file(f"temp/temp_ghcnh_{station_id}.nc", filepath)
+            os.remove(f"temp/temp_ghcnh_{station_id}.nc")
             print(f"  Saved {filename} ({ds.dims}) -> s3://{bucket}/{filepath}")
             ds.close()
 
