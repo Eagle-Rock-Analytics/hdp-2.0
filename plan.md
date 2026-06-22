@@ -1,21 +1,21 @@
 # Plan: Catch-up + Automate Historical Obs Platform (v2 — append-aware)
 
-> **Living document** — last updated 2026-06-22. Reflects completed Phase 0 + GHCNh
-> pivot work. The append pipeline is now validated end-to-end through QAQC. Merge
-> append e2e verification is the remaining Phase 0 gate before Phase 1 catch-up.
+> **Living document** — last updated 2026-06-22. Phase 0 complete. Full append
+> pipeline validated end-to-end (pull → clean → QAQC → merge). pcluster infrastructure
+> ready for ASOSAWOS catch-up batch. Next gate: P1.4 GHCNh pull catch-up on pcluster.
 
 ---
 
 ## Current Status (as of 2026-06-22)
 
-### Phase 0 — Append-aware refactor: 82% complete (9/11 tasks)
+### Phase 0 — Append-aware refactor: COMPLETE ✓
 
 **Done:**
 - `paths.py` fully env-var driven ✓ `hdp-b1d.1`
 - `ASOSAWOS_clean.py --append` mode ✓ `hdp-b1d.2`, `hdp-h1x`
 - QAQC `--append` mode ✓ `hdp-b1d.3`, `hdp-gmy`
-- Test bucket provisioned (`auto-hdp/hdp/ASOSAWOS/`, 426 stations, 2.26 GB) ✓ `hdp-b1d.5`
-- Per-station last-timestamp discovery (`discover_last_timestamps_asosawos.py`): 426 stations discovered from `auto-hdp` baseline ✓ `hdp-b1d.6`
+- Test bucket provisioned (`auto-hdp/hdp/ASOSAWOS/`, 455 stations) ✓ `hdp-b1d.5`
+- Per-station last-timestamp discovery (`discover_last_timestamps_asosawos.py`) ✓ `hdp-b1d.6`
 - GHCNh pull (`GHCNh_pull.py`): Parquet fetch from NCEI by station+year, S3 upload, skip-existing, retry ✓ `hdp-b1d.12`
 - GHCNh clean (`GHCNh_clean.py --append`): Parquet → HDP NetCDF, 18 vars, unit conversions ✓ `hdp-b1d.13`
 - GHCNh wired into pull orchestrator (`--backend ghcnh` default) ✓ `hdp-b1d.14`
@@ -23,12 +23,12 @@
 - Clean append validated: `ASOSAWOS_72020200118` 38,196 obs, 18 vars, 2022-09 → 2026-06 ✓ `hdp-b1d.8`
 - QAQC append validated: same station, 38,196 obs, sfcWind_dir flagged 38.96% ✓ `hdp-b1d.9`
 - `merge_hourly_standardization` TypeError fixed ✓ `hdp-8fr`
+- Merge `--append` mode: e2e verified; 2005-01-03 → 2026-06-09, 187,847 timesteps, 0 gaps > 1h ✓ `hdp-b1d.4`
 
 **In progress:**
-- Merge `--append` mode: core done; e2e real-station verification now unblocked ◐ `hdp-b1d.4`
+- `hdp-b1d.10`: pcluster batch script ready (`run_merge_append_ASOSAWOS.sh`, 455 tasks); blocked on QAQC append zarrs for all stations ◐
 
 **Open:**
-- `hdp-b1d.10`: Run merge append into test bucket (`auto-hdp`) for all ASOSAWOS stations
 - `hdp-b1d.11`: Validate ASOSAWOS timeseries continuity in test bucket (P2)
 
 **Deferred:**
@@ -40,6 +40,7 @@
 - `qaqc_unusual_large_jumps.py`: `freq='M'` → `'ME'` (pandas 2.x deprecation)
 - `qaqc_wholestation.py`: `not df.isnull()` → `~df.isnull()` (ambiguous Series truth value)
 - `merge_hourly_standardization.py`: filter float NaN before joining QC flags
+- `MERGE_pipeline.py`: clear stale zarr chunk encoding before `to_zarr` in append mode (encoding inherited from `xr.open_zarr` conflicts with rechunked dask layout)
 
 ---
 
@@ -84,7 +85,7 @@ OtherISD is in the same position as ASOSAWOS (also pulled from ISD FTP) and will
 
 ## TL;DR (revised)
 Three-phase plan, revised for GHCNh migration:
-- **Phase 0 — Append-aware refactor (~82% done)**: Add `--append` mode to clean/QAQC/merge. GHCNh scripts written and validated. Remaining: merge e2e verification (`hdp-b1d.4`) and full-run catch-up (`hdp-b1d.10`).
+- **Phase 0 — Append-aware refactor (COMPLETE ✓)**: `--append` mode validated e2e across clean/QAQC/merge. GHCNh scripts written and validated. pcluster batch scripts ready for catch-up. Only remaining: full-station merge batch run (`hdp-b1d.10`), blocked on QAQC catch-up.
 - **Phase 1 — GHCNh integration + catch-up (~30h revised)**: `GHCNh_pull.py`, `GHCNh_clean.py`, and orchestrator wiring are done. Remaining: pcluster catch-up run, publish to `cadcat/hdp/`, OtherISD.
 - **Phase 2 — Automation (~22h unchanged)**: AWS Batch + Step Functions + EventBridge, biweekly cadence. GHCNh pull replaces ISD pull in the containerized pipeline.
 
@@ -115,25 +116,26 @@ start), writes to `s3://{HDP_BUCKET}/2_clean_wx/{NETWORK}/_append/{STATION}.nc`.
 ### P0.3 — QAQC `--append` mode ✓ DONE (`hdp-b1d.3`, `hdp-gmy`)
 QAQC reads from `QAQC_APPEND` staging key, writes QAQC'd slice to append path.
 
-### P0.4 — Merge `--append` mode ◐ IN PROGRESS (`hdp-b1d.4`)
+### P0.4 — Merge `--append` mode ✓ DONE (`hdp-b1d.4`)
 Core implementation done (dedup-after-concat, baseline fallback, skip eraqc CSV
-overwrites in append mode). Pending: e2e real-station 30-day overlap verification
-after `hdp-8fr` (TypeError bug) is resolved.
+overwrites in append mode). Bug fixed: stale zarr encoding from `xr.open_zarr`
+caused `ValueError` on `to_zarr`; clear all variable/coordinate encodings before
+write. Verified on `ASOSAWOS_72020200118`: 2005-01-03 → 2026-06-09, 187,847
+timesteps, 0 gaps > 1h, 337 obs around Oct 2025 ISD→GHCNh boundary.
 
 ### P0.5 — Per-station discovery + pull orchestrator ◐ IN PROGRESS (`hdp-b1d.6`, `hdp-b1d.7`)
 - `discover_last_timestamps_asosawos.py` ✓ done
 - `pull_asosawos_from_last_timestamps.py` ✓ implemented + tested; **blocked by ISD freeze**
 
-### P0.6 — Fix `merge_hourly_standardization` TypeError ○ OPEN (`hdp-8fr`)
-Pre-existing bug: `sequence item 0: expected str instance, float found`. Blocks
-e2e append pipeline testing.
+### P0.6 — Fix `merge_hourly_standardization` TypeError ✓ DONE (`hdp-8fr`)
+Fixed: filter float NaN before joining QC flags; NaN-only returns `'nan'`.
 
-### P0.7 — Remaining append e2e (open)
-After `hdp-8fr` resolved and merge append verified:
-- `hdp-b1d.8`: Run ASOSAWOS clean on new raw slice
-- `hdp-b1d.9`: Run QAQC on new ASOSAWOS clean slice
-- `hdp-b1d.10`: Run merge append into test bucket for all ASOSAWOS stations
-- `hdp-b1d.11`: Validate ASOSAWOS timeseries continuity in test bucket
+### P0.7 — Remaining append e2e ✓ DONE
+- `hdp-b1d.8` ✓: GHCNh clean append validated on `ASOSAWOS_72020200118`
+- `hdp-b1d.9` ✓: QAQC append validated on same station
+- `hdp-b1d.4` ✓: Merge append validated e2e (see P0.4)
+- `hdp-b1d.10` ◐: pcluster batch script ready; pending QAQC catch-up for all 455 stations
+- `hdp-b1d.11`: Validate ASOSAWOS timeseries continuity in test bucket (P2, post hdp-b1d.10)
 
 ---
 
@@ -168,14 +170,17 @@ ISD FTP preserved as `--backend isd`. OtherISD deferred to post-ASOSAWOS validat
 ### P1.5 — Clean/QAQC/Merge catch-up on pcluster (~10h work, multi-day wallclock) ○ NOT STARTED
 - Run `GHCNh_clean.py --append` per station
 - Run QAQC `--append` per station (existing code, unchanged)
-- Run Merge `--append` per station (existing code, pending `hdp-b1d.4` completion)
-- Reuse pcluster flow:
-  ```
-  generate_station_list.py --network=ASOSAWOS
+- Run Merge `--append` per station — pcluster script ready (`run_merge_append_ASOSAWOS.sh`, 455 tasks)
+- pcluster flow:
+  ```bash
+  # Clean + QAQC (generate lists already done — ASOSAWOS-input.dat exists)
   generate_batch_script.py --network=ASOSAWOS --process=qaqc
   sbatch run_qaqc_ASOSAWOS.sh
+
+  # Merge (targets auto-hdp/hdp by default; change to cadcat/hdp for production)
+  sbatch run_merge_append_ASOSAWOS.sh
   ```
-- Set merge output to `s3://cadcat/hdp/` via `HDP_PUBLISH_BUCKET`/`HDP_PUBLISH_PREFIX`
+- For production publish: edit `HDP_PUBLISH_BUCKET=cadcat` / `HDP_PUBLISH_PREFIX=hdp` in `run_merge_append_ASOSAWOS.sh`
 
 ### P1.6 — Validation + publish (~4h) ○ NOT STARTED
 - For 5+ stations: plot pre/post timeseries at the Oct 2025 ISD→GHCNh boundary;
@@ -263,11 +268,10 @@ State machine stages:
 - [scripts/1_pull_data/ASOSAWOS_pullftp.py](scripts/1_pull_data/ASOSAWOS_pullftp.py) — ISD FTP pull (frozen at Oct 2025; keep for historical reference)
 - [scripts/2_clean_data/ASOSAWOS_clean.py](scripts/2_clean_data/ASOSAWOS_clean.py) — `--append` mode ✓
 - [scripts/3_qaqc_data/QAQC_run_for_single_station.py](scripts/3_qaqc_data/QAQC_run_for_single_station.py) — `--append` mode ✓
-- [scripts/4_merge_data/MERGE_run_for_single_station.py](scripts/4_merge_data/MERGE_run_for_single_station.py) — `--append` mode ◐ (in progress)
-
-### To be created
-- `scripts/1_pull_data/GHCNh_pull.py` — **not yet written**; fetches Parquet from NCEI by station+year
-- `scripts/2_clean_data/GHCNh_clean.py` — **not yet written**; GHCNh Parquet → HDP NetCDF
+- [scripts/4_merge_data/MERGE_run_for_single_station.py](scripts/4_merge_data/MERGE_run_for_single_station.py) — `--append` mode ✓
+- [scripts/pcluster/run_merge_append_template.sh](scripts/pcluster/run_merge_append_template.sh) — pcluster merge append template ✓
+- [scripts/pcluster/run_merge_append_ASOSAWOS.sh](scripts/pcluster/run_merge_append_ASOSAWOS.sh) — 455-task array job, ready to sbatch ✓
+- [scripts/pcluster/stations_input/ASOSAWOS-input.dat](scripts/pcluster/stations_input/ASOSAWOS-input.dat) — 455 station list ✓
 
 ### Reference
 - [CONTEXT.md](CONTEXT.md) — GHCNh technical reference (endpoints, format, variable map, station ID mapping, WECC coverage)
