@@ -34,8 +34,8 @@ def main():
         "-p",
         "--process",
         required=True,
-        choices=["merge", "qaqc"],
-        help="Process type: 'merge' or 'qaqc'",
+        choices=["merge", "merge_append", "qaqc"],
+        help="Process type: 'merge', 'merge_append', or 'qaqc'",
     )
     args = parser.parse_args()
     network = args.network
