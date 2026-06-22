@@ -1,35 +1,45 @@
 # Plan: Catch-up + Automate Historical Obs Platform (v2 — append-aware)
 
-> **Living document** — last updated 2026-06-19. Reflects completed Phase 0 work,
-> the ISD freeze discovery, and the resulting GHCNh pivot for ASOSAWOS/OtherISD.
+> **Living document** — last updated 2026-06-22. Reflects completed Phase 0 + GHCNh
+> pivot work. The append pipeline is now validated end-to-end through QAQC. Merge
+> append e2e verification is the remaining Phase 0 gate before Phase 1 catch-up.
 
 ---
 
-## Current Status (as of 2026-06-19)
+## Current Status (as of 2026-06-22)
 
-### Phase 0 — Append-aware refactor: 45% complete (5/11 tasks)
+### Phase 0 — Append-aware refactor: 82% complete (9/11 tasks)
 
 **Done:**
-- `paths.py` fully env-var driven (`HDP_BUCKET`, `HDP_PUBLISH_BUCKET`, `HDP_PUBLISH_PREFIX`) ✓ `hdp-b1d.1`
-- `ASOSAWOS_clean.py --append` mode: slices from per-station boundary, writes to `_append/` staging key ✓ `hdp-b1d.2`
-- QAQC `--append` mode: reads from `_append/` staging key, writes QAQC'd slice to `QAQC_APPEND` key ✓ `hdp-b1d.3`
-- Test bucket provisioned, `cadcat/hdp/ASOSAWOS` baseline copied ✓ `hdp-b1d.5`
-- Per-station last-timestamp discovery script (`discover_last_timestamps_asosawos.py`) ✓ `hdp-b1d.6`
-- Bug fixes: QAQC append zarr staging path ✓ `hdp-gmy`; clean append boundary aligned to hour start ✓ `hdp-h1x`
+- `paths.py` fully env-var driven ✓ `hdp-b1d.1`
+- `ASOSAWOS_clean.py --append` mode ✓ `hdp-b1d.2`, `hdp-h1x`
+- QAQC `--append` mode ✓ `hdp-b1d.3`, `hdp-gmy`
+- Test bucket provisioned (`auto-hdp/hdp/ASOSAWOS/`, 426 stations, 2.26 GB) ✓ `hdp-b1d.5`
+- Per-station last-timestamp discovery (`discover_last_timestamps_asosawos.py`): 426 stations discovered from `auto-hdp` baseline ✓ `hdp-b1d.6`
+- GHCNh pull (`GHCNh_pull.py`): Parquet fetch from NCEI by station+year, S3 upload, skip-existing, retry ✓ `hdp-b1d.12`
+- GHCNh clean (`GHCNh_clean.py --append`): Parquet → HDP NetCDF, 18 vars, unit conversions ✓ `hdp-b1d.13`
+- GHCNh wired into pull orchestrator (`--backend ghcnh` default) ✓ `hdp-b1d.14`
+- Raw pull validated: SFO (USW00014733) 2026: 1,117 KB, 3,829 hourly obs; orchestrator dry-run 25-station clean ✓ `hdp-b1d.7`
+- Clean append validated: `ASOSAWOS_72020200118` 38,196 obs, 18 vars, 2022-09 → 2026-06 ✓ `hdp-b1d.8`
+- QAQC append validated: same station, 38,196 obs, sfcWind_dir flagged 38.96% ✓ `hdp-b1d.9`
+- `merge_hourly_standardization` TypeError fixed ✓ `hdp-8fr`
 
 **In progress:**
-- Merge `--append` mode (dedup-after-concat): core implementation done; pending e2e real-station verification ◐ `hdp-b1d.4`
-- ASOSAWOS raw pull orchestrator (`pull_asosawos_from_last_timestamps.py`): implemented + tested; **blocked by ISD freeze** (see below) ◐ `hdp-b1d.7`
+- Merge `--append` mode: core done; e2e real-station verification now unblocked ◐ `hdp-b1d.4`
 
-**Open (not started):**
-- `hdp-b1d.8`: Run ASOSAWOS clean on new raw slice
-- `hdp-b1d.9`: Run QAQC on new ASOSAWOS clean slice
-- `hdp-b1d.10`: Run merge append into test bucket for all ASOSAWOS stations
-- `hdp-b1d.11`: Validate ASOSAWOS timeseries continuity in test bucket
+**Open:**
+- `hdp-b1d.10`: Run merge append into test bucket (`auto-hdp`) for all ASOSAWOS stations
+- `hdp-b1d.11`: Validate ASOSAWOS timeseries continuity in test bucket (P2)
 
-**Known bugs (open):**
-- `hdp-8fr`: `merge_hourly_standardization` TypeError in float conversion — pre-existing, blocks e2e
-- `hdp-1st`: ASOSAWOS pull granularity is year-level (not exact timestamp); deferred P2
+**Deferred:**
+- `hdp-1st`: Exact per-station pull timestamp boundaries (currently year-granular); P2
+
+**Bugs fixed this sprint (2026-06-19 → 2026-06-22):**
+- `GHCNh_clean.py`: BytesIO wrapper for S3 streaming body; correct `_append/` path convention
+- `QAQC_pipeline.py`: `qaqc_source` string variable excluded from QAQC processing (follows `qaqc_process` pattern)
+- `qaqc_unusual_large_jumps.py`: `freq='M'` → `'ME'` (pandas 2.x deprecation)
+- `qaqc_wholestation.py`: `not df.isnull()` → `~df.isnull()` (ambiguous Series truth value)
+- `merge_hourly_standardization.py`: filter float NaN before joining QC flags
 
 ---
 
@@ -74,8 +84,8 @@ OtherISD is in the same position as ASOSAWOS (also pulled from ISD FTP) and will
 
 ## TL;DR (revised)
 Three-phase plan, revised for GHCNh migration:
-- **Phase 0 — Append-aware refactor (~30h original, ~45% done)**: Add `--append` mode to clean/QAQC/merge. Core implementation complete; merge e2e and full-run validation remain.
-- **Phase 1 — GHCNh integration + catch-up (~30h revised)**: Write `GHCNh_pull.py` and `GHCNh_clean.py`, then run the append-aware pipeline from per-station last timestamps to present. This replaces the original ISD-FTP-based P1.2.
+- **Phase 0 — Append-aware refactor (~82% done)**: Add `--append` mode to clean/QAQC/merge. GHCNh scripts written and validated. Remaining: merge e2e verification (`hdp-b1d.4`) and full-run catch-up (`hdp-b1d.10`).
+- **Phase 1 — GHCNh integration + catch-up (~30h revised)**: `GHCNh_pull.py`, `GHCNh_clean.py`, and orchestrator wiring are done. Remaining: pcluster catch-up run, publish to `cadcat/hdp/`, OtherISD.
 - **Phase 2 — Automation (~22h unchanged)**: AWS Batch + Step Functions + EventBridge, biweekly cadence. GHCNh pull replaces ISD pull in the containerized pipeline.
 
 Decisions locked in: cross-account write to `cadcat/hdp`, biweekly cadence, append refactor in-scope, page on any failure, path layout `s3://cadcat/hdp/{NETWORK}/{STATION}.zarr` unchanged, climatology recompute = **Option A — refit from full record on every biweekly run**.
@@ -134,50 +144,20 @@ After `hdp-8fr` resolved and merge append verified:
 > migrate to GHCNh. Non-ISD networks (HADS, CIMIS, CW3E, MADIS, etc.) are
 > unaffected.
 
-### P1.1 — Write `GHCNh_pull.py` (~8h) ○ NOT STARTED
-New script: `scripts/1_pull_data/GHCNh_pull.py`. Responsibilities:
-- Accept `--station <ASOSAWOS_ID>` (or list), `--start-year`, `--end-year`
-- Convert HDP station ID → GHCNh ID: `ASOSAWOS_72630014733` → `USW00014733`
-- Fetch per-station per-year Parquet files from NCEI:
-  ```
-  https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/access/by-year/{YEAR}/parquet/GHCNh_{STATION}_{YEAR}.parquet
-  ```
-- Handle 404s gracefully (station absent for a year = no data, not an error)
-- Write raw Parquet to `s3://{HDP_BUCKET}/1_raw_wx/ASOSAWOS/{STATION}/{YEAR}.parquet`
-  (or `.gz` equivalent if downstream expects the ISD `.gz` naming; TBD in design)
-- Integrate with `pull_asosawos_from_last_timestamps.py` — replace the FTP call
-  with a GHCNh Parquet fetch for the relevant year range
-- Logging + error accumulation pattern matching existing scripts
+### P1.1 — Write `GHCNh_pull.py` ✓ DONE (`hdp-b1d.12`)
+`scripts/1_pull_data/GHCNh_pull.py`. Fetches per-station per-year Parquet from NCEI
+Ceph endpoint. Handles 404 (station absent for year) gracefully, 3-retry on 503/504,
+skip-existing via `head_object`. Output: `1_raw_wx/ASOSAWOS/{STATION}/GHCNh_{GHCNH_ID}_{YEAR}.parquet`.
+Design decision: **store as Parquet** (not re-encoded to ISD `.gz`). 17 unit tests.
 
-**Design decision needed:** does raw storage stay as-is (ISD `.gz`) or switch to
-Parquet? Parquet is the natural GHCNh format; keeping it avoids a re-encode step.
-The clean stage will need to adapt either way.
+### P1.2 — Write `GHCNh_clean.py` ✓ DONE (`hdp-b1d.13`)
+`scripts/2_clean_data/GHCNh_clean.py`. Reads GHCNh Parquet → HDP NetCDF (18 vars).
+Unit conversions applied. Sub-hourly handling: last obs per floor-hour. Output
+schema identical to `ASOSAWOS_clean.py`. Supports `--append`. 22 unit tests.
 
-### P1.2 — Write `GHCNh_clean.py` (~10h) ○ NOT STARTED
-New script: `scripts/2_clean_data/GHCNh_clean.py`. Responsibilities:
-- Read GHCNh Parquet (329 columns, `temperature`, `dew_point_temperature`, etc.)
-- Map GHCNh column names → HDP variable names (see `CONTEXT.md` for full table)
-- Apply unit conversions to SI: °C → K (temperature, dew point), m/s wind already
-  in m/s, mm precip already in mm, hPa → Pa (pressure)
-- Reconstruct hourly timestamp from `DATE` ISO string (or Year/Month/Day/Hour)
-- Handle sub-hourly obs: select the `:56` observation per hour as the canonical
-  hourly value (matching ASOS METAR convention), or use the last obs per hour
-- Apply QC flag filtering consistent with existing ASOSAWOS clean logic
-- Output: same `.nc` format as `ASOSAWOS_clean.py` so downstream QAQC/merge are
-  unchanged
-- Support `--append` flag for slice-only processing
-
-**Verification:** output of `GHCNh_clean.py` for an overlap period (e.g. 2024)
-should match `ASOSAWOS_clean.py` output from ISD for the same station+year.
-
-### P1.3 — Wire GHCNh into append pipeline (~4h) ○ NOT STARTED
-- Update `pull_asosawos_from_last_timestamps.py` to call `GHCNh_pull.py` for
-  stations where last-timestamp is Oct 2025 or later (or always, if the decision
-  is to cut over cleanly)
-- Add `--source ghcnh|isd` flag or auto-detect based on year (ISD for ≤2025,
-  GHCNh for 2026+) — design TBD
-- OtherISD: same treatment; `OtherISD_pull.py` and `OtherISD_clean.py` need
-  GHCNh equivalents or an adapter. Defer to after ASOSAWOS POC validates.
+### P1.3 — Wire GHCNh into append pipeline ✓ DONE (`hdp-b1d.14`)
+`pull_asosawos_from_last_timestamps.py` now uses `--backend ghcnh` (default).
+ISD FTP preserved as `--backend isd`. OtherISD deferred to post-ASOSAWOS validation.
 
 ### P1.4 — Catch-up pull: ASOSAWOS via GHCNh (~4h wallclock) ○ NOT STARTED
 - Run GHCNh pull for all active ASOSAWOS stations from each station's
