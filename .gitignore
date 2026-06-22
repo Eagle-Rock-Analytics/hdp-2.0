@@ -23,6 +23,7 @@ build/
 .jupyter/
 .local/
 .virtual_environments/
+.session-closed
 
 # Data
 *.nc

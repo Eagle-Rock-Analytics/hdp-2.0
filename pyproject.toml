@@ -14,6 +14,7 @@ dependencies = [
     "dask>=2024.2",
     "geopandas>=0.11",
     "h5netcdf>=1.0",
+    "h5py>=3.16.0",
     "intake>=0.7",
     "intake-esm>=2023.11",
     "ipykernel>=6.29",
