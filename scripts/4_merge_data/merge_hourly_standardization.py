@@ -41,7 +41,8 @@ def qaqc_flag_fcn(flags: str) -> str:
     if len(flags) == 0:
         return "nan"
     else:
-        return ",".join(flags.unique())
+        unique_str = [str(f) for f in flags.unique() if pd.notna(f)]
+        return ",".join(unique_str) if unique_str else "nan"
 
 
 def _modify_infill(df: pd.DataFrame, constant_vars: list) -> pd.DataFrame:
