@@ -511,6 +511,11 @@ def write_zarr_to_s3(
             )
             fs.rm(zarr_s3_path, recursive=True)
 
+        # Clear stale zarr chunk encoding inherited from open_zarr; let xarray
+        # derive fresh encoding from the current dask chunk structure.
+        for name in list(ds.data_vars) + list(ds.coords):
+            ds[name].encoding = {}
+
         ds.to_zarr(
             zarr_s3_path,
             consolidated=True,
