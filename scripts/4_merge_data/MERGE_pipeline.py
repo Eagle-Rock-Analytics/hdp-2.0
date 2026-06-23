@@ -501,6 +501,12 @@ def write_zarr_to_s3(
     logger.info(f"{inspect.currentframe().f_code.co_name}: Starting...")
     zarr_s3_path = f"s3://{bucket_name}/{merge_dir}/{network}/{station}.zarr"
     try:
+        # Eagerly load all data into memory BEFORE deleting the existing store.
+        # ds may be a lazy concat that references the same zarr we are about to
+        # delete (self-overwrite bug): computing first prevents reading from a
+        # deleted/truncated store which would silently produce NaN values.
+        ds = ds.compute()
+
         # Delete existing zarr store before writing
         # This avoids inconsistencies if there are differences between old vs. new
         # mode="w" only overwrites arrays with matching names, leaving old arrays behind
