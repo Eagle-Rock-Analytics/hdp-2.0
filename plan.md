@@ -1,20 +1,21 @@
 # Plan: Catch-up + Automate Historical Obs Platform (v2 — append-aware)
 
-> **Living document** — last updated 2026-06-22. Phase 0 complete. Full append
-> pipeline validated end-to-end (pull → clean → QAQC → merge). pcluster infrastructure
-> ready for ASOSAWOS catch-up batch. Next gate: P1.4 GHCNh pull catch-up on pcluster.
+> **Living document** — last updated 2026-06-23. Phase 0 complete. Phase 1 ASOSAWOS
+> catch-up complete in test bucket (`auto-hdp/hdp/ASOSAWOS/`, 429 deduplicated zarrs).
+> Next gate: P1.6 validation + publish to `cadcat/hdp/`.
 
 ---
 
-## Current Status (as of 2026-06-22)
+## Current Status (as of 2026-06-23)
 
 ### Phase 0 — Append-aware refactor: COMPLETE ✓
+### Phase 1 (ASOSAWOS) — Catch-up to test bucket: COMPLETE ✓
 
 **Done:**
 - `paths.py` fully env-var driven ✓ `hdp-b1d.1`
 - `ASOSAWOS_clean.py --append` mode ✓ `hdp-b1d.2`, `hdp-h1x`
 - QAQC `--append` mode ✓ `hdp-b1d.3`, `hdp-gmy`
-- Test bucket provisioned (`auto-hdp/hdp/ASOSAWOS/`, 455 stations) ✓ `hdp-b1d.5`
+- Test bucket provisioned (`auto-hdp/hdp/ASOSAWOS/`) ✓ `hdp-b1d.5`
 - Per-station last-timestamp discovery (`discover_last_timestamps_asosawos.py`) ✓ `hdp-b1d.6`
 - GHCNh pull (`GHCNh_pull.py`): Parquet fetch from NCEI by station+year, S3 upload, skip-existing, retry ✓ `hdp-b1d.12`
 - GHCNh clean (`GHCNh_clean.py --append`): Parquet → HDP NetCDF, 18 vars, unit conversions ✓ `hdp-b1d.13`
@@ -24,23 +25,29 @@
 - QAQC append validated: same station, 38,196 obs, sfcWind_dir flagged 38.96% ✓ `hdp-b1d.9`
 - `merge_hourly_standardization` TypeError fixed ✓ `hdp-8fr`
 - Merge `--append` mode: e2e verified; 2005-01-03 → 2026-06-09, 187,847 timesteps, 0 gaps > 1h ✓ `hdp-b1d.4`
-
-**In progress:**
-- `hdp-b1d.10`: pcluster batch script ready (`run_merge_append_ASOSAWOS.sh`, 455 tasks); blocked on QAQC append zarrs for all stations ◐
+- **P1.4**: GHCNh pull complete — all 455 stations, 2022–2026 Parquet in `1_raw_wx/ASOSAWOS/` ✓
+- **P1.5a**: Clean + QAQC append complete — 446/455 stations (9 deactivated pre-2022, expected) ✓
+- **P1.5b**: Merge append complete — 429 deduplicated zarrs in `auto-hdp/hdp/ASOSAWOS/` ✓
+  - Pre/post validation: pre-2022 tas NaN% matches baseline (~0.1–47% per station quality)
+  - `ASOSAWOS_72074924255` (Whidbey Island NAS) manually updated: baseline_only → full (1980–2026)
+  - 20 WBAN-collision duplicates removed (all were `append_only` with a `full` counterpart under a different USAF code)
+  - Manifest saved to `temp/asosawos_merge_manifest.csv`
 
 **Open:**
-- `hdp-b1d.11`: Validate ASOSAWOS timeseries continuity in test bucket (P2)
+- `hdp-b1d.11`: Validate ASOSAWOS timeseries continuity + publish to `cadcat/hdp/` (P1.6)
 
 **Deferred:**
 - `hdp-1st`: Exact per-station pull timestamp boundaries (currently year-granular); P2
 
-**Bugs fixed this sprint (2026-06-19 → 2026-06-22):**
+**Bugs fixed this sprint (2026-06-19 → 2026-06-23):**
 - `GHCNh_clean.py`: BytesIO wrapper for S3 streaming body; correct `_append/` path convention
+- `GHCNh_clean.py`: station-specific temp file (`temp_ghcnh_{station_id}.nc`) to prevent parallel NFS collision
 - `QAQC_pipeline.py`: `qaqc_source` string variable excluded from QAQC processing (follows `qaqc_process` pattern)
 - `qaqc_unusual_large_jumps.py`: `freq='M'` → `'ME'` (pandas 2.x deprecation)
 - `qaqc_wholestation.py`: `not df.isnull()` → `~df.isnull()` (ambiguous Series truth value)
 - `merge_hourly_standardization.py`: filter float NaN before joining QC flags
-- `MERGE_pipeline.py`: clear stale zarr chunk encoding before `to_zarr` in append mode (encoding inherited from `xr.open_zarr` conflicts with rechunked dask layout)
+- `MERGE_pipeline.py`: clear stale zarr chunk encoding before `to_zarr` in append mode
+- `MERGE_pipeline.py`: **self-overwrite NaN bug** — `ds.compute()` before `fs.rm()` in `write_zarr_to_s3`; lazy concat referenced the same zarr being deleted, silently producing 100% NaN for pre-2022 data
 
 ---
 
@@ -161,26 +168,20 @@ schema identical to `ASOSAWOS_clean.py`. Supports `--append`. 22 unit tests.
 `pull_asosawos_from_last_timestamps.py` now uses `--backend ghcnh` (default).
 ISD FTP preserved as `--backend isd`. OtherISD deferred to post-ASOSAWOS validation.
 
-### P1.4 — Catch-up pull: ASOSAWOS via GHCNh (~4h wallclock) ○ NOT STARTED
-- Run GHCNh pull for all active ASOSAWOS stations from each station's
-  last-timestamp through today-45d
-- Verify raw Parquet lands in S3; spot-check data against NCEI web explorer
-- Track failures per `stnlist_update_pull.py` pattern
+### P1.4 — Catch-up pull: ASOSAWOS via GHCNh ✓ DONE
+- All 455 stations pulled, 2022–2026 Parquet in `s3://wecc-historical-wx/1_raw_wx/ASOSAWOS/`
 
-### P1.5 — Clean/QAQC/Merge catch-up on pcluster (~10h work, multi-day wallclock) ○ NOT STARTED
-- Run `GHCNh_clean.py --append` per station
-- Run QAQC `--append` per station (existing code, unchanged)
-- Run Merge `--append` per station — pcluster script ready (`run_merge_append_ASOSAWOS.sh`, 455 tasks)
-- pcluster flow:
-  ```bash
-  # Clean + QAQC (generate lists already done — ASOSAWOS-input.dat exists)
-  generate_batch_script.py --network=ASOSAWOS --process=qaqc
-  sbatch run_qaqc_ASOSAWOS.sh
-
-  # Merge (targets auto-hdp/hdp by default; change to cadcat/hdp for production)
-  sbatch run_merge_append_ASOSAWOS.sh
-  ```
-- For production publish: edit `HDP_PUBLISH_BUCKET=cadcat` / `HDP_PUBLISH_PREFIX=hdp` in `run_merge_append_ASOSAWOS.sh`
+### P1.5 — Clean/QAQC/Merge catch-up on pcluster ✓ DONE
+- Clean + QAQC: 446/455 stations (9 deactivated = expected failures)
+- Merge (pcluster job 2704): 429 deduplicated zarrs written to `s3://auto-hdp/hdp/ASOSAWOS/`
+- **WBAN deduplication**: Post-merge, found 20 `append_only` zarrs were WBAN collisions
+  (multiple USAF codes sharing the same physical station/WBAN). All 20 had a `full`-record
+  counterpart already in the bucket. `ASOSAWOS_72074924255` (Whidbey Island NAS, WBAN=24255)
+  was manually completed (clean → QAQC → merge) before removing its 2 duplicates.
+  All 20 duplicates deleted. Final count: **429 zarrs** (`full`: 409, `baseline_only`: 18,
+  2 log subdirs excluded).
+- Manifest: `temp/asosawos_merge_manifest.csv`
+- Manifest — investigation of collisions: `temp/asosawos_append_only_investigation.csv`
 
 ### P1.6 — Validation + publish (~4h) ○ NOT STARTED
 - For 5+ stations: plot pre/post timeseries at the Oct 2025 ISD→GHCNh boundary;
