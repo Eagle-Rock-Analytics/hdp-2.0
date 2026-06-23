@@ -31,13 +31,14 @@ build/
 
 # Logging
 */qaqc_figs/
-*/merge_logs/
+**/merge_logs/
 */timing/
 */temp/
 */tmp/
 */local_qaqced_files
 default_qaqc_log.log
 default_merge_log.log
+**/*.log
 
 # Beads / Dolt files (added by bd init)
 .dolt/

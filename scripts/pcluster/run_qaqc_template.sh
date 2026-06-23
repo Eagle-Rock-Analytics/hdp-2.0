@@ -84,8 +84,13 @@ log_file="$NEW_OUT"
   echo "====================================="
 } >> "$log_file"
 
+REPO_ROOT=/home/ec2-user/hdp-2.0
+
+# Activate uv-managed venv (head node NFS share, no EFS cost)
+source ${REPO_ROOT}/.venv/bin/activate
+
 # Change to the directory containing the script
-cd ../3_qaqc_data/ || { echo "Directory change failed"; exit 1; }
+cd ${REPO_ROOT}/scripts/3_qaqc_data/ || { echo "Directory change failed"; exit 1; }
 
 # Define the path to your Python script
 PYSCRIPT="QAQC_run_for_single_station.py"
@@ -93,20 +98,15 @@ PYSCRIPT="QAQC_run_for_single_station.py"
 # Start time tracking
 start_time=$(date +%s)
 
-# Load Conda initialization
-source /shared/nicole/.mamba/etc/profile.d/conda.sh
-
-# Run the Python script
-source /opt/parallelcluster/shared/miniforge3/b/etc/profile.d/conda.sh
-conda activate /shared/nicole/.mamba/envs/hist-obs
-python3 ${PYSCRIPT} --station="$STATION"
+# Run the Python script in append mode
+python3 ${PYSCRIPT} --station="$STATION" --append
 
 # End time tracking
 end_time=$(date +%s)
 elapsed_time=$((end_time - start_time))
 
-# Change to the directory containing the logfile
-cd ../pcluster/ || { echo "Directory change failed"; exit 1; }
+# Return to pcluster dir for log rename
+cd ${REPO_ROOT}/scripts/pcluster/ || true
 
 # Write end-of-job info
 {

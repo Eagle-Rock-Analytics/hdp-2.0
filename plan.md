@@ -130,9 +130,9 @@ caused `ValueError` on `to_zarr`; clear all variable/coordinate encodings before
 write. Verified on `ASOSAWOS_72020200118`: 2005-01-03 → 2026-06-09, 187,847
 timesteps, 0 gaps > 1h, 337 obs around Oct 2025 ISD→GHCNh boundary.
 
-### P0.5 — Per-station discovery + pull orchestrator ◐ IN PROGRESS (`hdp-b1d.6`, `hdp-b1d.7`)
+### P0.5 — Per-station discovery + pull orchestrator ✓ DONE (`hdp-b1d.6`, `hdp-b1d.7`)
 - `discover_last_timestamps_asosawos.py` ✓ done
-- `pull_asosawos_from_last_timestamps.py` ✓ implemented + tested; **blocked by ISD freeze**
+- `pull_asosawos_from_last_timestamps.py` ✓ implemented + tested; ISD freeze resolved via GHCNh backend (`hdp-b1d.14`)
 
 ### P0.6 — Fix `merge_hourly_standardization` TypeError ✓ DONE (`hdp-8fr`)
 Fixed: filter float NaN before joining QC flags; NaN-only returns `'nan'`.
