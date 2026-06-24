@@ -9,6 +9,12 @@ The existing merged station zarr in the publish bucket that serves as the starti
 ## test bucket
 A sandboxed S3 bucket (e.g. `hdp-test-asosawos`) holding a copy of the production ASOSAWOS baseline zarrs. All Phase 1 append operations target this bucket, not `cadcat`. Protects production data during development.
 
+## private publish target
+A non-public S3 bucket or prefix that holds the authoritative merged dataset for
+automation runs while HDP output remains private. It serves as both the append
+baseline read location and the merge write target. It is durable storage, not an
+ephemeral staging area.
+
 ## per-station last timestamp
 The last time coordinate in a station's baseline zarr, read at the start of each append run. Used as `start_date` for the raw data pull for that station. Varies per station — active stations have recent timestamps; inactive stations may be years behind. Discovered by opening each zarr and reading `ds.time.values[-1]`.
 
@@ -28,6 +34,11 @@ The `.nc` output produced by `ASOSAWOS_clean.py --append` for a single station. 
 The S3 path where a clean new-slice is written during an append run:
 `s3://{HDP_BUCKET}/2_clean_wx/{NETWORK}/_append/{STATION}.nc`
 The `_append` subprefix (constant `CLEAN_APPEND` in `scripts/paths.py`) is a cross-stage contract: the QAQC append stage must read from this key, not from the full-history clean key. Kept separate to allow full-history re-runs without stomping in-flight append slices.
+
+## no-op run
+A scheduled automation run that completes without processing any stations because
+the pull and diff stages found zero touched stations. This is considered a
+successful outcome when source freshness remains within the expected lag window.
 
 ---
 
