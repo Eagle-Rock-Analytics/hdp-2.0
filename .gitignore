@@ -34,6 +34,8 @@ build/
 **/merge_logs/
 */timing/
 */temp/
+/scripts/1_pull_data/temp/
+/temp/
 */tmp/
 */local_qaqced_files
 default_qaqc_log.log

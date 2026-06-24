@@ -1,0 +1,65 @@
+################################################################################
+# HDP-2.0 ParallelCluster Configuration
+#
+# Storage strategy: NO EFS.
+#   pcluster v3 automatically NFS-exports the head node's /home to all compute
+#   nodes over the private cluster network. The repo + uv venv live at
+#   /home/ec2-user/hdp-2.0/. Compute nodes see it read-only via NFS with no
+#   additional EFS cost.
+#
+#   All persistent data flows through S3 (wecc-historical-wx / cadcat).
+#
+# Compute: c6i.large Spot (2 vCPU / 4 GB), up to 100 nodes.
+#   QAQC jobs are ~30-60 min each; merge jobs ~10-30 min.
+#   455 stations across 4 staged arrays completes in ~10-15 h wallclock.
+#
+# Key pair: neil-caladapt  (~/.ssh/neil-caladapt.pem)
+# Profile:  neil.AE  (us-west-2)
+# VPC:      hist-obs-vpc (vpc-08796ff94c8ea1659)
+################################################################################
+
+Region: us-west-2
+Image:
+  Os: alinux2023
+
+HeadNode:
+  InstanceType: t3.large               # 8 GB RAM — required for ≥25 compute nodes
+  Networking:
+    SubnetId: subnet-04e4f8ad2973f8917   # hist-obs-vpc / us-west-2a (public)
+  Ssh:
+    KeyName: neil-caladapt
+  Iam:
+    AdditionalIamPolicies:
+      - Policy: arn:aws:iam::aws:policy/AmazonS3FullAccess
+  # No SharedStorage block — head-node /home NFS share is automatic and free.
+
+Scheduling:
+  Scheduler: slurm
+  ScalingStrategy: best-effort        # dispatch to as many nodes as possible immediately
+  SlurmSettings:
+    ScaledownIdletime: 5              # terminate idle nodes after 5 min (default: 10)
+  SlurmQueues:
+    - Name: compute
+      CapacityType: SPOT
+      AllocationStrategy: price-capacity-optimized  # balances low price + low interruption risk
+      ComputeResources:
+        - Name: spot-2vcpu-4gb
+          Instances:
+            - InstanceType: c6i.large   # 2 vCPU / 4 GB
+            - InstanceType: c6a.large   # AMD equivalent — often cheaper Spot
+            - InstanceType: c5.large    # older gen, high availability pool
+            - InstanceType: m5.large    # memory gen, good fallback availability
+          MinCount: 0
+          MaxCount: 25
+      Networking:
+        # Spread across all four AZs so Spot capacity is available
+        SubnetIds:
+          - subnet-04e4f8ad2973f8917   # us-west-2a
+          - subnet-0781de388d07e8c93   # us-west-2b
+          - subnet-0e0c9eeec2189e556   # us-west-2c
+          - subnet-0930d529ca5bec184   # us-west-2d
+        PlacementGroup:
+          Enabled: false   # must be false when spanning multiple AZs
+      Iam:
+        AdditionalIamPolicies:
+          - Policy: arn:aws:iam::aws:policy/AmazonS3FullAccess
