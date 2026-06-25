@@ -2,7 +2,7 @@
 
 > **Living document** — last updated 2026-06-23. Phase 0 complete. Phase 1 ASOSAWOS
 > catch-up complete in test bucket (`auto-hdp/hdp/ASOSAWOS/`, 429 deduplicated zarrs).
-> Next gate: P1.6 validation + publish to `cadcat/hdp/`.
+> Next gate: P1.6 validation against `s3://auto-hdp/hdp/ASOSAWOS/`.
 
 ---
 
@@ -34,7 +34,7 @@
   - Manifest saved to `temp/asosawos_merge_manifest.csv`
 
 **Open:**
-- `hdp-b1d.11`: Validate ASOSAWOS timeseries continuity + publish to `cadcat/hdp/` (P1.6)
+- `hdp-b1d.11`: Validate ASOSAWOS timeseries continuity against `s3://auto-hdp/hdp/ASOSAWOS/` (P1.6)
 
 **Deferred:**
 - `hdp-1st`: Exact per-station pull timestamp boundaries (currently year-granular); P2
@@ -93,10 +93,10 @@ OtherISD is in the same position as ASOSAWOS (also pulled from ISD FTP) and will
 ## TL;DR (revised)
 Three-phase plan, revised for GHCNh migration:
 - **Phase 0 — Append-aware refactor (COMPLETE ✓)**: `--append` mode validated e2e across clean/QAQC/merge. GHCNh scripts written and validated. pcluster batch scripts ready for catch-up. Only remaining: full-station merge batch run (`hdp-b1d.10`), blocked on QAQC catch-up.
-- **Phase 1 — GHCNh integration + catch-up (~30h revised)**: `GHCNh_pull.py`, `GHCNh_clean.py`, and orchestrator wiring are done. Remaining: pcluster catch-up run, publish to `cadcat/hdp/`, OtherISD.
+- **Phase 1 — GHCNh integration + catch-up (~30h revised)**: `GHCNh_pull.py`, `GHCNh_clean.py`, and orchestrator wiring are done. Remaining: validation against `s3://auto-hdp/hdp/ASOSAWOS/`, then OtherISD.
 - **Phase 2 — Automation (~22h unchanged)**: AWS Batch + Step Functions + EventBridge, biweekly cadence. GHCNh pull replaces ISD pull in the containerized pipeline.
 
-Decisions locked in: cross-account write to `cadcat/hdp`, biweekly cadence, append refactor in-scope, page on any failure, path layout `s3://cadcat/hdp/{NETWORK}/{STATION}.zarr` unchanged, climatology recompute = **Option A — refit from full record on every biweekly run**.
+Decisions locked in: current private ASOSAWOS source/validation target is `s3://auto-hdp/hdp/ASOSAWOS/`, biweekly cadence, append refactor in-scope, page on any failure, climatology recompute = **Option A — refit from full record on every biweekly run**.
 
 ---
 
@@ -186,7 +186,7 @@ ISD FTP preserved as `--backend isd`. OtherISD deferred to post-ASOSAWOS validat
 ### P1.6 — Validation + publish (~4h) ○ NOT STARTED
 - For 5+ stations: plot pre/post timeseries at the Oct 2025 ISD→GHCNh boundary;
   assert no discontinuity in temperature, wind, pressure
-- Run `scripts/tests/` validators against `s3://cadcat/hdp/` data
+- Run `scripts/tests/` validators against `s3://auto-hdp/hdp/ASOSAWOS/` data
 - Verify `data-access/` examples still work
 
 ### P1.7 — OtherISD (deferred, post-ASOSAWOS) ○ NOT STARTED
@@ -211,7 +211,7 @@ stations via the same `USW`/`USC` ID namespace.
 ### P2.2 — Staging buckets + IAM (~3h)
 - `s3://hdp-staging-pull/{NETWORK}/` (mirrors `1_raw_wx`); 30-day lifecycle
 - `s3://hdp-staging-qaqc/{NETWORK}/` (mirrors `3_qaqc_wx_v2`); 30-day lifecycle
-- IAM role: read staging-pull, write staging-qaqc, write `cadcat/hdp`
+- IAM role: read staging-pull, write staging-qaqc, write `s3://auto-hdp/hdp/ASOSAWOS/`
 
 ### P2.3 — Batch compute environment (~3h)
 - EC2 Spot, instance types `c7i-flex.large`, `c7g.large`, `m7i-flex.large`
@@ -224,13 +224,13 @@ State machine stages:
 2. **Diff-stations**: Lambda lists modified prefixes, builds station array.
 3. **Clean-fanout**: `GHCNh_clean.py --append` (ASOSAWOS/OtherISD) or existing cleaner.
 4. **QAQC-fanout**: `MaxConcurrency=500`, one job per station → `hdp-staging-qaqc`.
-5. **Merge-fanout**: One job per station → `s3://cadcat/hdp/`.
+5. **Merge-fanout**: One job per station → `s3://auto-hdp/hdp/ASOSAWOS/`.
 6. **Stationlist-update**: Single job runs `stnlist_update_*` for all networks.
 7. **Notify**: SNS on success/failure.
 
 ### P2.5 — EventBridge schedule + observability (~3h)
 - EventBridge: `cron(0 8 1 * ? *)` (1st of month, 08:00 UTC) → Step Functions
-- CloudWatch dashboard: Batch success rate, Step Functions duration, `cadcat/hdp` object count delta
+- CloudWatch dashboard: Batch success rate, Step Functions duration, `auto-hdp/hdp/ASOSAWOS` object count delta
 - SNS alerts on Step Functions failure or >5% station failure rate
 
 ## Cost Estimates (revised)
@@ -284,7 +284,7 @@ State machine stages:
 
 1. **GHCNh ↔ ISD overlap check**: For a station with data in both (any year ≤2025), `GHCNh_clean.py` output should match `ASOSAWOS_clean.py` output within sensor precision.
 2. **Append boundary**: Run append for a station with a known 30-day overlap; assert no duplicate time coordinates in final zarr.
-3. **Phase 1 ASOSAWOS**: `aws s3 ls s3://cadcat/hdp/ASOSAWOS/ | wc -l` matches expected active station count.
+3. **Phase 1 ASOSAWOS**: `aws s3 ls s3://auto-hdp/hdp/ASOSAWOS/ | wc -l` matches expected active station count.
 4. **Timeseries continuity**: For 5+ stations, plot the Oct 2025 ISD→GHCNh handoff in the merged zarr; assert no jump or gap.
 5. **Phase 2 container**: `docker run hdp:latest run-qaqc --station=CW3E_HDC` produces same zarr as a local run.
 6. **Phase 2 state machine**: Manually trigger; assert all states green and station counts match.
@@ -301,4 +301,4 @@ State machine stages:
 1. **GHCNh raw storage format**: Keep as Parquet in S3 (natural format), or re-encode to ISD `.gz` for pipeline compatibility? Recommend Parquet-native — simpler and faster.
 2. **Station ID inventory maintenance**: GHCNh station list should be cached locally (or refreshed monthly) rather than hitting NCEI on every pull run. Consider a `scripts/1_pull_data/refresh_ghcnh_station_list.py` helper.
 3. **Oct 2025 gap stitching**: Some stations may have ISD data through Aug 2025 (FTP) and GHCNh data from Jan 2024 onward (with overlap). The append dedup logic handles this correctly; document the expected overlap in the validation step.
-4. **cadcat bucket policy**: Neil owns cross-account write permission. Required before Phase 1 merge outputs can land in `cadcat/hdp`.
+4. **auto-hdp access policy**: confirm the pipeline role retains read/write access to `s3://auto-hdp/hdp/ASOSAWOS/` for the current private Phase 1 and Phase 2 workflow.

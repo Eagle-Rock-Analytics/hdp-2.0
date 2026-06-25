@@ -76,7 +76,7 @@ Pipeline stages, each in `scripts/<stage>/`:
 1. **1_pull_data/** — download raw data from 27 weather networks
 2. **2_clean_data/** — standardize units (SI) and format per network
 3. **3_qaqc_data/** — 10+ modular QA/QC checks per station
-4. **4_merge_data/** — hourly standardization, publish to `s3://cadcat/hdp/{NETWORK}/{STATION}.zarr`
+4. **4_merge_data/** — hourly standardization; for the current ASOSAWOS private workflow, use `s3://auto-hdp/hdp/ASOSAWOS/` as the bucket source/target
 
 `scripts/paths.py` is env-var driven — all bucket names come from env vars (`HDP_BUCKET`, `HDP_PUBLISH_BUCKET`, `HDP_PUBLISH_PREFIX`). Never hardcode S3 paths.
 

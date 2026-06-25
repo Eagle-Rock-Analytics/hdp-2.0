@@ -176,7 +176,7 @@ def qaqc_frequent_vals(
             df_valid.loc[df_valid[var + "_eraqc"] == 100, var + "_eraqc"] = np.nan
 
             # apply unique df_valid flags into full df
-            isFlagged = df_valid.loc[not df_valid[var + "_eraqc"].isnull()]
+            isFlagged = df_valid.loc[df_valid[var + "_eraqc"].notna()]
             for i in isFlagged.index:
                 flag_to_place = isFlagged.loc[isFlagged.index == i][
                     var + "_eraqc"

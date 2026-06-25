@@ -403,8 +403,12 @@ def frequent_plot_helper(
     plt.legend(("Cleaned data", "Flagged"), loc="upper right")
     ax = plt.gca()
     leg = ax.get_legend()
-    leg.legendHandles[0].set_color("k")  # set valid to black
-    leg.legendHandles[-1].set_color("r")  # set flagged bar to red
+    handles = getattr(leg, "legendHandles", None)
+    if handles is None:
+        handles = getattr(leg, "legend_handles", [])
+    if handles:
+        handles[0].set_color("k")  # set valid to black
+        handles[-1].set_color("r")  # set flagged bar to red
 
     if var == "rsds":
         plt.annotate(

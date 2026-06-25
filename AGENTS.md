@@ -2,7 +2,7 @@
 
 This is the v2 rewrite of the Historical Observations Platform, incorporating Phase 0–2 from [plan.md](../historical-obs-platform/plan.md):
 - **Phase 0**: Append-aware refactor of clean/QAQC/merge
-- **Phase 1**: Catch-up backfill to `s3://cadcat/hdp/` with env-driven paths
+- **Phase 1**: Catch-up backfill to `s3://auto-hdp/hdp/ASOSAWOS/` with env-driven paths
 - **Phase 2**: Automated AWS Batch + Step Functions + EventBridge pipeline
 
 See the original repo's [README.md](https://github.com/Eagle-Rock-Analytics/historical-obs-platform/blob/main/README.md) for dataset overview.
@@ -55,12 +55,12 @@ Dockerfile                # Single image for all pipeline entrypoints (to be cre
 | Env var | Default | Purpose |
 |---|---|---|
 | `HDP_BUCKET` | `wecc-historical-wx` | Staging/intermediate data |
-| `HDP_PUBLISH_BUCKET` | `cadcat` | Published output bucket |
+| `HDP_PUBLISH_BUCKET` | `cadcat` | Generic publish bucket default in code; current ASOSAWOS source/validation work uses `auto-hdp` |
 | `HDP_PUBLISH_PREFIX` | `hdp` | Prefix within publish bucket |
 
-**Always import from `scripts/paths.py`** — never hardcode `s3://wecc-historical-wx` or `s3://cadcat` anywhere in scripts.
+**Always import from `scripts/paths.py`** — never hardcode `s3://wecc-historical-wx` or bucket names anywhere in scripts.
 
-Published output layout: `s3://cadcat/hdp/{NETWORK}/{STATION}.zarr`
+Current ASOSAWOS bucket source for agent work: `s3://auto-hdp/hdp/ASOSAWOS/`
 
 ### AWS S3 Layout
 
@@ -69,7 +69,7 @@ Published output layout: `s3://cadcat/hdp/{NETWORK}/{STATION}.zarr`
 | Raw | `1_raw_wx/{NETWORK}/` | `wecc-historical-wx` (or `HDP_BUCKET`) |
 | Clean | `2_clean_wx/{NETWORK}/` | `wecc-historical-wx` |
 | QAQC | `3_qaqc_wx_v2/{NETWORK}/` | `wecc-historical-wx` |
-| Merge (published) | `hdp/{NETWORK}/{STATION}.zarr` | `cadcat` (or `HDP_PUBLISH_BUCKET/HDP_PUBLISH_PREFIX`) |
+| Merge (published) | `hdp/{NETWORK}/{STATION}.zarr` | Current ASOSAWOS source: `auto-hdp` at `s3://auto-hdp/hdp/ASOSAWOS/`; generic code path still uses `HDP_PUBLISH_BUCKET/HDP_PUBLISH_PREFIX` |
 | Staging pull (Phase 2) | `1_raw_wx/{NETWORK}/` | `hdp-staging-pull` |
 | Staging QAQC (Phase 2) | `3_qaqc_wx_v2/{NETWORK}/` | `hdp-staging-qaqc` |
 

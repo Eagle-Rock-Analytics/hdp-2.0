@@ -4,7 +4,7 @@
 A pipeline execution mode (`--append` flag) in which a stage processes only the new time-slice for a station — from the start of the hour containing the station's last output timestamp onward — rather than reprocessing the full historical record. The merge stage implements this as: run pipeline on new slice → `xr.concat` with existing zarr → dedup on time coordinate (`keep="last"`) → write back. Contrast: **full-overwrite mode** (existing behavior, `mode="w"` with no slice filtering).
 
 ## baseline zarr
-The existing merged station zarr in the publish bucket that serves as the starting point for an append operation. For the ASOSAWOS POC, the baseline is copied from `s3://cadcat/hdp/ASOSAWOS/` into the test bucket before any append work begins.
+The existing merged station zarr in the publish bucket that serves as the starting point for an append operation. For the current ASOSAWOS private workflow, the baseline/source bucket is `s3://auto-hdp/hdp/ASOSAWOS/`.
 
 ## test bucket
 A sandboxed S3 bucket (e.g. `hdp-test-asosawos`) holding a copy of the production ASOSAWOS baseline zarrs. All Phase 1 append operations target this bucket, not `cadcat`. Protects production data during development.
