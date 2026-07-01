@@ -130,3 +130,6 @@ skips = [
     "B321",  # FTP calls — upstream sources require FTP, can't replace
     "B402",  # FTP import — upstream sources require FTP, can't replace
 ]
+
+[tool.setuptools]
+packages = ["scripts"]
