@@ -9,9 +9,9 @@
 #
 #   All persistent data flows through S3 (wecc-historical-wx / cadcat).
 #
-# Compute: c6i.large Spot (2 vCPU / 4 GB), up to 100 nodes.
-#   QAQC jobs are ~30-60 min each; merge jobs ~10-30 min.
-#   455 stations across 4 staged arrays completes in ~10-15 h wallclock.
+# Compute: wide spot pool across 6th-7th gen Intel and AMD families.
+#   Expanded instance families reduce interruption risk and improve throughput.
+#   Capacity-optimized allocation spreads load across multiple pools.
 #
 # Key pair: neil-caladapt  (~/.ssh/neil-caladapt.pem)
 # Profile:  neil.AE  (us-west-2)
@@ -23,7 +23,7 @@ Image:
   Os: alinux2023
 
 HeadNode:
-  InstanceType: t3.large               # 8 GB RAM — required for ≥25 compute nodes
+  InstanceType: t3.xlarge              # 16 GB RAM — supports large clusters reliably
   Networking:
     SubnetId: subnet-04e4f8ad2973f8917   # hist-obs-vpc / us-west-2a (public)
   Ssh:
@@ -43,12 +43,29 @@ Scheduling:
       CapacityType: SPOT
       AllocationStrategy: price-capacity-optimized  # balances low price + low interruption risk
       ComputeResources:
+        - Name: spot-4vcpu-8gb
+          Instances:
+            - InstanceType: c6i.xlarge   # 4 vCPU / 8 GB, 3rd gen Xeon
+            - InstanceType: c7i.xlarge   # 4 vCPU / 8 GB, 4th gen Xeon (newer)
+            - InstanceType: c6a.xlarge   # 4 vCPU / 8 GB, AMD EPYC
+            - InstanceType: c5.xlarge    # 4 vCPU / 8 GB, 2nd gen Xeon (fallback)
+            - InstanceType: m6i.xlarge   # 4 vCPU / 16 GB, general purpose
+            - InstanceType: m7i.xlarge   # 4 vCPU / 16 GB, 4th gen Xeon gen-purpose
+            - InstanceType: m5.xlarge    # 4 vCPU / 16 GB, older gen (availability)
+            - InstanceType: t3.xlarge    # 4 vCPU / 16 GB, burstable (fallback)
+          MinCount: 0
+          MaxCount: 25
         - Name: spot-2vcpu-4gb
           Instances:
-            - InstanceType: c6i.large   # 2 vCPU / 4 GB
-            - InstanceType: c6a.large   # AMD equivalent — often cheaper Spot
-            - InstanceType: c5.large    # older gen, high availability pool
-            - InstanceType: m5.large    # memory gen, good fallback availability
+            - InstanceType: c6i.large    # 2 vCPU / 4 GB, 3rd gen Xeon
+            - InstanceType: c7i.large    # 2 vCPU / 8 GB, 4th gen Xeon (newer)
+            - InstanceType: c6a.large    # 2 vCPU / 4 GB, AMD EPYC
+            - InstanceType: c5a.large    # 2 vCPU / 4 GB, AMD EPYC (older)
+            - InstanceType: c5.large     # 2 vCPU / 4 GB, 2nd gen Xeon (fallback)
+            - InstanceType: m6i.large    # 2 vCPU / 16 GB, general purpose
+            - InstanceType: m7i.large    # 2 vCPU / 16 GB, 4th gen Xeon gen-purpose
+            - InstanceType: m5.large     # 2 vCPU / 8 GB, older gen (availability)
+            - InstanceType: t3.large     # 2 vCPU / 8 GB, burstable (fallback)
           MinCount: 0
           MaxCount: 25
       Networking:
