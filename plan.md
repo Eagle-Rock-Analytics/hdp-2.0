@@ -1,17 +1,36 @@
 # Plan: Catch-up + Automate Historical Obs Platform (v2 — append-aware)
 
-> **Living document** — last updated 2026-06-23. Phase 0 complete. Phase 1 ASOSAWOS
-> catch-up complete in test bucket (`auto-hdp/hdp/ASOSAWOS/`, 429 deduplicated zarrs).
-> Next gate: P1.6 validation against `s3://auto-hdp/hdp/ASOSAWOS/`.
+> **Living document** — last updated 2026-07-01. Phase 0 complete. Phase 1 ASOSAWOS
+> catch-up in progress (final 16-station backfill, job 19/25/27 running on ParallelCluster
+> with expanded spot pool). Prior progress: 5 stations validated, 429 total in bucket.
+> Next gate: Complete 16-station batch, validate all published data in `s3://auto-hdp/hdp/ASOSAWOS/`.
 
 ---
 
-## Current Status (as of 2026-06-23)
+## Current Status (as of 2026-07-01)
 
 ### Phase 0 — Append-aware refactor: COMPLETE ✓
-### Phase 1 (ASOSAWOS) — Catch-up to test bucket: COMPLETE ✓
+### Phase 1 (ASOSAWOS) — Catch-up to test bucket: IN PROGRESS (final batch)
 
-**Done:**
+**Completed Prior to Final Batch:**
+- All prior work items (GHCNh pull/clean, merge validation, 429 zarrs published) ✓
+- Prior 5-station backfill successful; validated on auto-hdp/hdp/ASOSAWOS/ ✓
+
+**Current Work (2026-07-01):**
+- ParallelCluster expanded with wider spot pool (c7i, m6i, m7i families, t3.xlarge head) ✓
+- pyproject.toml fixed for setuptools package discovery ✓
+- venv created on cluster, hdp-2-0 package installed ✓
+- 16-station final backfill submitted: Job 19 (clean, 16 tasks %4) → Job 25 (QAQC, dep 19) → Job 27 (merge, dep 25)
+  - Resubmitted after initial job 1 failed (missing venv at compute node time)
+  - Jobs 19/25/27 now running with environment available
+
+**Next:**
+- Monitor 16-station batch to completion (~60 min ETA)
+- Validate all 21 published stations in auto-hdp/hdp/ASOSAWOS/
+- Close out Phase 1 documentation
+- Begin Phase 2 infrastructure planning
+
+---
 - `paths.py` fully env-var driven ✓ `hdp-b1d.1`
 - `ASOSAWOS_clean.py --append` mode ✓ `hdp-b1d.2`, `hdp-h1x`
 - QAQC `--append` mode ✓ `hdp-b1d.3`, `hdp-gmy`
@@ -32,9 +51,11 @@
   - `ASOSAWOS_72074924255` (Whidbey Island NAS) manually updated: baseline_only → full (1980–2026)
   - 20 WBAN-collision duplicates removed (all were `append_only` with a `full` counterpart under a different USAF code)
   - Manifest saved to `temp/asosawos_merge_manifest.csv`
+  - Boundary remediation rerun complete: all 86 previously boundary-limited stations now extend past the 2022 boundary
+  - Holdout validation complete: remaining 6 active-station holdouts updated successfully; latest end timestamps now at ~2026-06-09 (`temp/asosawos_6_final_validation.csv`)
 
 **Open:**
-- `hdp-b1d.11`: Validate ASOSAWOS timeseries continuity against `s3://auto-hdp/hdp/ASOSAWOS/` (P1.6)
+- `hdp-b1d.11`: Finalize ASOSAWOS continuity evidence and close out P1.6 documentation against `s3://auto-hdp/hdp/ASOSAWOS/` (rerun remediation complete)
 
 **Deferred:**
 - `hdp-1st`: Exact per-station pull timestamp boundaries (currently year-granular); P2
