@@ -1,7 +1,7 @@
 """Discover per-station baseline timestamps for ASOSAWOS append runs.
 
 This utility reads the authoritative ASOSAWOS station list, checks which
-stations have baseline merged zarrs in the publish bucket, and emits:
+stations have baseline merged zarrs in the source baseline bucket, and emits:
 
 1. A CSV of (station_id, last_timestamp) for stations with readable baselines.
 2. A CSV of (station_id, status, detail) for missing, empty, or unreadable
@@ -19,7 +19,7 @@ import pandas as pd
 import xarray as xr
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import PUBLISH_BUCKET, PUBLISH_PREFIX, STATIONS_CSV_PATH
+from paths import MERGE_WX, SOURCE_BUCKET, STATIONS_CSV_PATH
 
 
 def load_station_ids(
@@ -57,8 +57,8 @@ def list_baseline_station_ids(
 
 def read_baseline_last_timestamp(
     station_id: str,
-    bucket: str = PUBLISH_BUCKET,
-    publish_prefix: str = PUBLISH_PREFIX,
+    bucket: str = SOURCE_BUCKET,
+    publish_prefix: str = MERGE_WX,
     network: str = "ASOSAWOS",
 ) -> tuple[datetime | None, str, str]:
     """Read the last time coordinate from a station baseline zarr.
@@ -86,8 +86,8 @@ def read_baseline_last_timestamp(
 def build_inventory_rows(
     station_ids: list[str],
     baseline_station_ids: set[str],
-    bucket: str = PUBLISH_BUCKET,
-    publish_prefix: str = PUBLISH_PREFIX,
+    bucket: str = SOURCE_BUCKET,
+    publish_prefix: str = MERGE_WX,
     network: str = "ASOSAWOS",
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     """Return successful timestamp rows and missing/error rows."""
@@ -100,7 +100,7 @@ def build_inventory_rows(
                 {
                     "station_id": station_id,
                     "status": "missing",
-                    "detail": "baseline zarr absent from publish bucket",
+                    "detail": "baseline zarr absent from source baseline bucket",
                 }
             )
             continue
@@ -145,13 +145,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--bucket",
-        default=PUBLISH_BUCKET,
-        help="Publish bucket containing merged station zarrs.",
+        default=SOURCE_BUCKET,
+        help="Source baseline bucket containing merged station zarrs.",
     )
     parser.add_argument(
         "--prefix",
-        default=PUBLISH_PREFIX,
-        help="Publish prefix within the bucket.",
+        default=MERGE_WX,
+        help="Source baseline prefix within the bucket.",
     )
     parser.add_argument(
         "--network",

@@ -6,7 +6,7 @@
 # Description:
 #   Launches the merge pipeline in --append mode for historical weather station
 #   data. Reads QAQC append slice from wecc-historical-wx/3_qaqc_wx_v2/ASOSAWOS/_append/,
-#   reads existing baseline from HDP_PUBLISH_BUCKET/HDP_PUBLISH_PREFIX/ASOSAWOS/,
+#   reads existing baseline from HDP_SOURCE_BUCKET/4_merge_wx_v2/ASOSAWOS/,
 #   concatenates, deduplicates on time, writes back.
 #
 #   Set HDP_PUBLISH_BUCKET / HDP_PUBLISH_PREFIX below:
@@ -32,7 +32,7 @@
 
 # Job Information:
 #SBATCH --job-name=hist-obs-merge-append
-#SBATCH --array=1-455
+#SBATCH --array=1-301
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -41,7 +41,8 @@
 #SBATCH --output=%x_%A_%a_output.txt
 #SBATCH --error=%x_%A_%a_error.txt
 
-# Publish target — change to cadcat/hdp for production catch-up
+# Baseline source + publish target for append repair runs.
+export HDP_SOURCE_BUCKET="wecc-historical-wx"
 export HDP_PUBLISH_BUCKET="auto-hdp"
 export HDP_PUBLISH_PREFIX="hdp"
 
@@ -72,6 +73,7 @@ log_file="$NEW_OUT"
 {
   echo "====================================="
   echo "Station: $STATION"
+  echo "Baseline source: s3://${HDP_SOURCE_BUCKET}/4_merge_wx_v2"
   echo "Publish target: s3://${HDP_PUBLISH_BUCKET}/${HDP_PUBLISH_PREFIX}"
   echo "Job Name: $SLURM_JOB_NAME"
   echo "Array Job ID: $SLURM_ARRAY_JOB_ID"

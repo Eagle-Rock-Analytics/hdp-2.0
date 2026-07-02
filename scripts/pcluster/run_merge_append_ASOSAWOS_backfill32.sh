@@ -1,25 +1,25 @@
 #!/bin/bash -l
 
 ################################################################################
-# SLURM Batch Script Template: run_qaqc_{NETWORK}.sh
+# SLURM Batch Script Template: run_merge_append_ASOSAWOS.sh
 #
 # Description:
-#   Launches the QA/QC pipeline for historical weather station data.
-#   Each SLURM array task processes a single station using the script:
-#       ../3_qaqc_data/QAQC_run_for_single_station.py
+#   Launches the merge pipeline in --append mode for historical weather station
+#   data. Reads QAQC append slice from wecc-historical-wx/3_qaqc_wx_v2/ASOSAWOS/_append/,
+#   reads existing baseline from HDP_SOURCE_BUCKET/4_merge_wx_v2/ASOSAWOS/,
+#   concatenates, deduplicates on time, writes back.
 #
-#   This is an embarrassingly parallel workload:
-#   - Each task is independent and processes one station
-#   - Tasks require no communication or coordination
-#   - Ideal for SLURM array jobs and horizontal scaling
+#   Set HDP_PUBLISH_BUCKET / HDP_PUBLISH_PREFIX below:
+#     - Test run  : auto-hdp / hdp
+#     - Production: cadcat   / hdp
 #
 # Inputs:
-#   - Station list: stations_input/{NETWORK}-input.dat
-#   - Python script: ../3_qaqc_data/QAQC_run_for_single_station.py
+#   - Station list: stations_input/ASOSAWOS-backfill32-input.dat
+#   - Python script: ../4_merge_data/MERGE_run_for_single_station.py
 #   - Conda environment: hist-obs
 #
 # SLURM Configuration:
-#   - Partition: compute-72cpus
+#   - Partition: compute
 #   - CPUs per task: 1
 #   - One array task per station (set using line count of input file)
 #
@@ -28,15 +28,11 @@
 #
 # Output:
 #   - Output and error logs are saved per-task, including the station name
-#
-# Notes:
-#   - AWS credentials must be exported before submission (or hardcoded below)
-#   - The array range will be set automatically based on station count
 ################################################################################
 
 # Job Information:
-#SBATCH --job-name=hist-obs
-#SBATCH --array=1-{NROWS}
+#SBATCH --job-name=hdp-merge-bf32
+#SBATCH --array=1-32%8
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -45,16 +41,18 @@
 #SBATCH --output=%x_%A_%a_output.txt
 #SBATCH --error=%x_%A_%a_error.txt
 
-# Explicit baseline source for append history lookup.
+# Baseline source + publish target for append repair runs.
 export HDP_SOURCE_BUCKET="wecc-historical-wx"
+export HDP_PUBLISH_BUCKET="auto-hdp"
+export HDP_PUBLISH_PREFIX="hdp"
 
 # Get the station name for this array task
-STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/{NETWORK}-input.dat)
+STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/ASOSAWOS-backfill32-input.dat)
 
 # AWS credentials
 # Don't need to hard code them in if they are already saved as environment variables
 # export AWS_ACCESS_KEY_ID="put-your-key-id-here"
-# export AWS_SECRET_ACCESS_KEY="put-your-key-here"
+# export AWS_SECRET_ACCESS_KEY="put-your-key-here"  # pragma: allowlist secret
 # export AWS_DEFAULT_REGION="us-west-2"
 
 # Rename SLURM-generated output and error files to include station name
@@ -76,6 +74,7 @@ log_file="$NEW_OUT"
   echo "====================================="
   echo "Station: $STATION"
   echo "Baseline source: s3://${HDP_SOURCE_BUCKET}/4_merge_wx_v2"
+  echo "Publish target: s3://${HDP_PUBLISH_BUCKET}/${HDP_PUBLISH_PREFIX}"
   echo "Job Name: $SLURM_JOB_NAME"
   echo "Array Job ID: $SLURM_ARRAY_JOB_ID"
   echo "Task ID: $SLURM_ARRAY_TASK_ID"
@@ -94,10 +93,10 @@ REPO_ROOT=/home/ec2-user/hdp-2.0
 source ${REPO_ROOT}/.venv/bin/activate
 
 # Change to the directory containing the script
-cd ${REPO_ROOT}/scripts/3_qaqc_data/ || { echo "Directory change failed"; exit 1; }
+cd ${REPO_ROOT}/scripts/4_merge_data/ || { echo "Directory change failed"; exit 1; }
 
 # Define the path to your Python script
-PYSCRIPT="QAQC_run_for_single_station.py"
+PYSCRIPT="MERGE_run_for_single_station.py"
 
 # Start time tracking
 start_time=$(date +%s)

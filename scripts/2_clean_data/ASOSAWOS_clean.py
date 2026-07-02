@@ -58,8 +58,8 @@ from clean_utils import get_file_paths
 from paths import (
     BUCKET_NAME,
     CLEAN_APPEND,
-    PUBLISH_BUCKET,
-    PUBLISH_PREFIX,
+    MERGE_WX,
+    SOURCE_BUCKET,
     WECC_MAR,
     WECC_TERR,
 )
@@ -170,11 +170,11 @@ def _filter_rows_after(df: pd.DataFrame, T: datetime) -> pd.DataFrame:
 def _baseline_last_time(station: str) -> datetime | None:
     """Return the last time coordinate from the baseline merged zarr for *station*.
 
-    Reads from ``s3://{PUBLISH_BUCKET}/{PUBLISH_PREFIX}/ASOSAWOS/{station}.zarr``.
+    Reads from ``s3://{SOURCE_BUCKET}/{MERGE_WX}/ASOSAWOS/{station}.zarr``.
     Returns ``None`` if the zarr does not exist or has no time data, which causes
     the caller to fall back to a full-record clean.
     """
-    zarr_url = f"s3://{PUBLISH_BUCKET}/{PUBLISH_PREFIX}/ASOSAWOS/{station}.zarr"
+    zarr_url = f"s3://{SOURCE_BUCKET}/{MERGE_WX}/ASOSAWOS/{station}.zarr"
     try:
         ds = xr.open_zarr(zarr_url)
         last = pd.Timestamp(ds.time.values[-1]).to_pydatetime()

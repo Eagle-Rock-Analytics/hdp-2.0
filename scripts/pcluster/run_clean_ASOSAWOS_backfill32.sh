@@ -13,7 +13,7 @@
 #   Output: s3://wecc-historical-wx/2_clean_wx_append/ASOSAWOS/{STATION}.nc
 #
 # Inputs:
-#   - Station list: stations_input/ASOSAWOS-input.dat
+#   - Station list: stations_input/ASOSAWOS-backfill32-input.dat
 #   - Python script: scripts/2_clean_data/GHCNh_clean.py
 #   - uv venv: /home/ec2-user/hdp-2.0/.venv
 #
@@ -27,13 +27,12 @@
 ################################################################################
 
 # Job Information:
-#SBATCH --job-name=hdp-clean
-#SBATCH --array=1-301
+#SBATCH --job-name=hdp-clean-bf32
+#SBATCH --array=1-32%8
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=1:00:00
-#SBATCH --mem=6G
 #SBATCH --partition=compute
 #SBATCH --output=%x_%A_%a_output.txt
 #SBATCH --error=%x_%A_%a_error.txt
@@ -44,7 +43,7 @@ REPO_ROOT=/home/ec2-user/hdp-2.0
 export HDP_SOURCE_BUCKET="wecc-historical-wx"
 
 # Get the station name for this array task
-STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/ASOSAWOS-input.dat)
+STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/ASOSAWOS-backfill32-input.dat)
 
 # Rename SLURM-generated output and error files to include station name
 ORIG_OUT="${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}_output.txt"

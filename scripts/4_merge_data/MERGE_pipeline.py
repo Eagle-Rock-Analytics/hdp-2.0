@@ -50,6 +50,7 @@ from paths import (
     PUBLISH_PREFIX,
     QAQC_APPEND,
     QAQC_WX,
+    SOURCE_BUCKET,
     STATIONS_CSV_PATH,
 )
 
@@ -206,6 +207,44 @@ def merge_existing_and_new_slice(
     combined = xr.concat([existing, new_slice], dim="time")
     combined = combined.drop_duplicates(dim="time", keep="last")
     return combined.sortby("time")
+
+
+def assert_no_history_shrink(
+    existing: xr.Dataset,
+    candidate: xr.Dataset,
+    logger: logging.Logger,
+) -> None:
+    """Ensure append output does not lose historical timestamps from baseline."""
+    existing_times = pd.DatetimeIndex(pd.to_datetime(existing.time.values))
+    candidate_times = pd.DatetimeIndex(pd.to_datetime(candidate.time.values))
+
+    if existing_times.size == 0:
+        return
+    if candidate_times.size == 0:
+        raise ValueError(
+            "Append candidate has zero timestamps while baseline is non-empty"
+        )
+
+    existing_min = existing_times.min()
+    candidate_min = candidate_times.min()
+    if candidate_min > existing_min:
+        raise ValueError(
+            "Append candidate starts later than baseline "
+            f"(candidate_min={candidate_min}, baseline_min={existing_min})"
+        )
+
+    missing_from_candidate = existing_times.difference(candidate_times)
+    if len(missing_from_candidate) > 0:
+        logger.error(
+            "Append guardrail: missing %s historical timestamps from baseline. "
+            "First missing timestamp: %s",
+            len(missing_from_candidate),
+            missing_from_candidate[0],
+        )
+        raise ValueError(
+            "Append candidate would drop baseline timestamps; refusing write. "
+            f"missing_count={len(missing_from_candidate)}"
+        )
 
 
 def get_var_attrs(
@@ -641,8 +680,19 @@ def run_merge_one_station(
 
         # Write the xarray Dataset as a Zarr file to the specified S3 path
         if append:
+            baseline_url = (
+                f"s3://{SOURCE_BUCKET}/{MERGE_WX}/{network_name}/{station}.zarr"
+            )
+            publish_url = (
+                f"s3://{PUBLISH_BUCKET}/{PUBLISH_PREFIX}/{network_name}/{station}.zarr"
+            )
+            logger.info(
+                "Append mode baseline source: %s; publish target: %s",
+                baseline_url,
+                publish_url,
+            )
             ds_existing = read_published_merged_dataset(
-                PUBLISH_BUCKET, PUBLISH_PREFIX, network_name, station, logger
+                SOURCE_BUCKET, MERGE_WX, network_name, station, logger
             )
             if ds_existing is None:
                 logger.info(
@@ -651,6 +701,7 @@ def run_merge_one_station(
                 ds_to_write = ds_merged
             else:
                 ds_to_write = merge_existing_and_new_slice(ds_existing, ds_merged)
+                assert_no_history_shrink(ds_existing, ds_to_write, logger)
                 ds_existing.close()
         else:
             ds_to_write = ds_merged

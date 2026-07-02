@@ -165,6 +165,6 @@ def test_build_inventory_rows_splits_success_and_missing(monkeypatch):
         {
             "station_id": "ASOSAWOS_333",
             "status": "missing",
-            "detail": "baseline zarr absent from publish bucket",
+            "detail": "baseline zarr absent from source baseline bucket",
         },
     ]

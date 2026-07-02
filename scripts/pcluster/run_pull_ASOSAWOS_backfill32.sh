@@ -1,50 +1,46 @@
 #!/bin/bash -l
 
 ################################################################################
-# SLURM Batch Script Template: run_clean_ASOSAWOS.sh
+# SLURM Batch Script Template: run_pull_ASOSAWOS.sh
 #
 # Description:
-#   Cleans GHCNh Parquet files into the HDP NetCDF append slice for one station.
+#   Pulls GHCNh Parquet files from NCEI for a single ASOSAWOS station.
 #   Each SLURM array task handles one station (embarrassingly parallel).
 #
-#   Uses --append mode: reads the station's baseline zarr last timestamp from
-#   the source baseline bucket and processes only new data since that point.
+#   Fetches years 2022-present; skip-existing logic in GHCNh_pull.py avoids
+#   re-downloading Parquet files already in S3.
 #
-#   Output: s3://wecc-historical-wx/2_clean_wx_append/ASOSAWOS/{STATION}.nc
+#   Output: s3://wecc-historical-wx/1_raw_wx/ASOSAWOS/{STATION}/GHCNh_*.parquet
 #
 # Inputs:
-#   - Station list: stations_input/ASOSAWOS-input.dat
-#   - Python script: scripts/2_clean_data/GHCNh_clean.py
+#   - Station list: stations_input/ASOSAWOS-backfill32-input.dat
+#   - Python script: scripts/1_pull_data/GHCNh_pull.py
 #   - uv venv: /home/ec2-user/hdp-2.0/.venv
 #
 # SLURM Configuration:
 #   - Partition: compute
 #   - CPUs per task: 1
-#   - 1 h per station
+#   - 30 min per station (mostly HTTP download + S3 upload)
 #
 # Working Directory:
 #   Submit from scripts/pcluster/
 ################################################################################
 
 # Job Information:
-#SBATCH --job-name=hdp-clean
-#SBATCH --array=1-301
+#SBATCH --job-name=hdp-pull-bf32
+#SBATCH --array=1-32%8
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=1:00:00
-#SBATCH --mem=6G
+#SBATCH --time=0:30:00
 #SBATCH --partition=compute
 #SBATCH --output=%x_%A_%a_output.txt
 #SBATCH --error=%x_%A_%a_error.txt
 
 REPO_ROOT=/home/ec2-user/hdp-2.0
 
-# Explicit baseline source for append boundary lookup.
-export HDP_SOURCE_BUCKET="wecc-historical-wx"
-
 # Get the station name for this array task
-STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/ASOSAWOS-input.dat)
+STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/ASOSAWOS-backfill32-input.dat)
 
 # Rename SLURM-generated output and error files to include station name
 ORIG_OUT="${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}_output.txt"
@@ -61,7 +57,6 @@ log_file="$NEW_OUT"
 {
   echo "====================================="
   echo "Station: $STATION"
-  echo "Baseline source: s3://${HDP_SOURCE_BUCKET}/4_merge_wx_v2"
   echo "Job Name: $SLURM_JOB_NAME"
   echo "Array Job ID: $SLURM_ARRAY_JOB_ID"
   echo "Task ID: $SLURM_ARRAY_TASK_ID"
@@ -73,12 +68,12 @@ log_file="$NEW_OUT"
 # Activate uv-managed venv (head node NFS share, no EFS)
 source ${REPO_ROOT}/.venv/bin/activate
 
-cd ${REPO_ROOT}/scripts/2_clean_data/ || { echo "Directory change failed"; exit 1; }
+cd ${REPO_ROOT}/scripts/1_pull_data/ || { echo "Directory change failed"; exit 1; }
 
 start_time=$(date +%s)
 
-# Clean GHCNh Parquet → HDP NetCDF append slice
-python3 GHCNh_clean.py --station="$STATION" --append
+# Pull GHCNh Parquet from NCEI, years 2022-present; skip already-uploaded files
+python3 GHCNh_pull.py --station="$STATION" --start-year 1972
 
 end_time=$(date +%s)
 elapsed_time=$((end_time - start_time))

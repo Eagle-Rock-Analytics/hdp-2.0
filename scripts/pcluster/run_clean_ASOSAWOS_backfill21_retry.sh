@@ -1,25 +1,24 @@
 #!/bin/bash -l
 
 ################################################################################
-# SLURM Batch Script Template: run_clean_ASOSAWOS.sh
+# SLURM Batch Script: run_clean_ASOSAWOS_backfill21_retry.sh
 #
 # Description:
-#   Cleans GHCNh Parquet files into the HDP NetCDF append slice for one station.
-#   Each SLURM array task handles one station (embarrassingly parallel).
-#
-#   Uses --append mode: reads the station's baseline zarr last timestamp from
-#   the source baseline bucket and processes only new data since that point.
+#   Retries the ASOSAWOS clean stage for only the stations that failed in the
+#   first backfill pass, using a larger Slurm memory request so the scheduler
+#   will prefer a larger spot node class.
 #
 #   Output: s3://wecc-historical-wx/2_clean_wx_append/ASOSAWOS/{STATION}.nc
 #
 # Inputs:
-#   - Station list: stations_input/ASOSAWOS-input.dat
+#   - Station list: stations_input/ASOSAWOS-backfill21-input.dat
 #   - Python script: scripts/2_clean_data/GHCNh_clean.py
 #   - uv venv: /home/ec2-user/hdp-2.0/.venv
 #
 # SLURM Configuration:
 #   - Partition: compute
 #   - CPUs per task: 1
+#   - Memory request: 6 GB
 #   - 1 h per station
 #
 # Working Directory:
@@ -27,8 +26,8 @@
 ################################################################################
 
 # Job Information:
-#SBATCH --job-name=hdp-clean
-#SBATCH --array=1-301
+#SBATCH --job-name=hdp-clean-bf21
+#SBATCH --array=1-21%4
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -44,7 +43,7 @@ REPO_ROOT=/home/ec2-user/hdp-2.0
 export HDP_SOURCE_BUCKET="wecc-historical-wx"
 
 # Get the station name for this array task
-STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/ASOSAWOS-input.dat)
+STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/ASOSAWOS-backfill21-input.dat)
 
 # Rename SLURM-generated output and error files to include station name
 ORIG_OUT="${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}_output.txt"
@@ -70,14 +69,12 @@ log_file="$NEW_OUT"
   echo "====================================="
 } >> "$log_file"
 
-# Activate uv-managed venv (head node NFS share, no EFS)
 source ${REPO_ROOT}/.venv/bin/activate
 
 cd ${REPO_ROOT}/scripts/2_clean_data/ || { echo "Directory change failed"; exit 1; }
 
 start_time=$(date +%s)
 
-# Clean GHCNh Parquet → HDP NetCDF append slice
 python3 GHCNh_clean.py --station="$STATION" --append
 
 end_time=$(date +%s)

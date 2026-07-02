@@ -67,9 +67,9 @@ from paths import (
     BUCKET_NAME,
     CLEAN_APPEND,
     CLEAN_WX,
-    PUBLISH_BUCKET,
-    PUBLISH_PREFIX,
+    MERGE_WX,
     RAW_WX,
+    SOURCE_BUCKET,
 )
 
 s3 = boto3.resource("s3")
@@ -160,7 +160,7 @@ def _baseline_last_time(station_id: str) -> datetime | None:
     Returns ``None`` if the zarr does not exist or has no time data, which
     causes the caller to fall back to a full-record clean.
     """
-    zarr_url = f"s3://{PUBLISH_BUCKET}/{PUBLISH_PREFIX}/ASOSAWOS/{station_id}.zarr"
+    zarr_url = f"s3://{SOURCE_BUCKET}/{MERGE_WX}/ASOSAWOS/{station_id}.zarr"
     try:
         ds = xr.open_zarr(zarr_url)
         last = pd.Timestamp(ds.time.values[-1]).to_pydatetime()

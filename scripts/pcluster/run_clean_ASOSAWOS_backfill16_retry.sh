@@ -1,52 +1,41 @@
 #!/bin/bash -l
 
 ################################################################################
-# SLURM Batch Script Template: run_clean_ASOSAWOS.sh
+# SLURM Batch Script: run_clean_ASOSAWOS_backfill16_retry.sh
 #
 # Description:
-#   Cleans GHCNh Parquet files into the HDP NetCDF append slice for one station.
-#   Each SLURM array task handles one station (embarrassingly parallel).
-#
-#   Uses --append mode: reads the station's baseline zarr last timestamp from
-#   the source baseline bucket and processes only new data since that point.
-#
-#   Output: s3://wecc-historical-wx/2_clean_wx_append/ASOSAWOS/{STATION}.nc
+#   Retries the ASOSAWOS clean stage for only the stations that still failed
+#   after the smaller-node retry, using a larger memory request so Slurm will
+#   favor the 4vcpu/8gb spot nodes.
 #
 # Inputs:
-#   - Station list: stations_input/ASOSAWOS-input.dat
+#   - Station list: stations_input/ASOSAWOS-backfill16-input.dat
 #   - Python script: scripts/2_clean_data/GHCNh_clean.py
 #   - uv venv: /home/ec2-user/hdp-2.0/.venv
-#
-# SLURM Configuration:
-#   - Partition: compute
-#   - CPUs per task: 1
-#   - 1 h per station
-#
-# Working Directory:
-#   Submit from scripts/pcluster/
 ################################################################################
 
 # Job Information:
-#SBATCH --job-name=hdp-clean
-#SBATCH --array=1-301
+#SBATCH --job-name=hdp-clean-bf16
+#SBATCH --array=1-16%4
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=1:00:00
-#SBATCH --mem=6G
+#SBATCH --mem=7G
 #SBATCH --partition=compute
 #SBATCH --output=%x_%A_%a_output.txt
 #SBATCH --error=%x_%A_%a_error.txt
 
 REPO_ROOT=/home/ec2-user/hdp-2.0
 
-# Explicit baseline source for append boundary lookup.
 export HDP_SOURCE_BUCKET="wecc-historical-wx"
 
-# Get the station name for this array task
-STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/ASOSAWOS-input.dat)
+STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" ${REPO_ROOT}/scripts/pcluster/stations_input/ASOSAWOS-backfill16-input.dat)
+if [ -z "$STATION" ]; then
+  echo "Station lookup failed for array task $SLURM_ARRAY_TASK_ID"
+  exit 1
+fi
 
-# Rename SLURM-generated output and error files to include station name
 ORIG_OUT="${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}_output.txt"
 ORIG_ERR="${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}_error.txt"
 NEW_OUT="${SLURM_JOB_NAME}_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}_${STATION}_output.txt"
@@ -70,14 +59,12 @@ log_file="$NEW_OUT"
   echo "====================================="
 } >> "$log_file"
 
-# Activate uv-managed venv (head node NFS share, no EFS)
 source ${REPO_ROOT}/.venv/bin/activate
 
 cd ${REPO_ROOT}/scripts/2_clean_data/ || { echo "Directory change failed"; exit 1; }
 
 start_time=$(date +%s)
 
-# Clean GHCNh Parquet → HDP NetCDF append slice
 python3 GHCNh_clean.py --station="$STATION" --append
 
 end_time=$(date +%s)

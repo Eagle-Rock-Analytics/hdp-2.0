@@ -36,7 +36,7 @@
 
 # Job Information:
 #SBATCH --job-name=hist-obs
-#SBATCH --array=1-455
+#SBATCH --array=1-301
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -45,12 +45,15 @@
 #SBATCH --output=%x_%A_%a_output.txt
 #SBATCH --error=%x_%A_%a_error.txt
 
+# Explicit baseline source for append history lookup.
+export HDP_SOURCE_BUCKET="wecc-historical-wx"
+
 # Get the station name for this array task
 STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/ASOSAWOS-input.dat)
 
 # AWS credentials
 # Don't need to hard code them in if they are already saved as environment variables
-# export AWS_ACCESS_KEY_ID="put-your-key-id-here"
+# export AWS_ACCESS_KEY_ID="put-your-key-id-here"  # pragma: allowlist secret
 # export AWS_SECRET_ACCESS_KEY="put-your-key-here"  # pragma: allowlist secret
 # export AWS_DEFAULT_REGION="us-west-2"
 
@@ -72,6 +75,7 @@ log_file="$NEW_OUT"
 {
   echo "====================================="
   echo "Station: $STATION"
+  echo "Baseline source: s3://${HDP_SOURCE_BUCKET}/4_merge_wx_v2"
   echo "Job Name: $SLURM_JOB_NAME"
   echo "Array Job ID: $SLURM_ARRAY_JOB_ID"
   echo "Task ID: $SLURM_ARRAY_TASK_ID"

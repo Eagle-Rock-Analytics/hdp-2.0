@@ -1,7 +1,7 @@
 #!/bin/bash -l
 
 ################################################################################
-# SLURM Batch Script Template: run_qaqc_{NETWORK}.sh
+# SLURM Batch Script Template: run_qaqc_ASOSAWOS.sh
 #
 # Description:
 #   Launches the QA/QC pipeline for historical weather station data.
@@ -14,7 +14,7 @@
 #   - Ideal for SLURM array jobs and horizontal scaling
 #
 # Inputs:
-#   - Station list: stations_input/{NETWORK}-input.dat
+#   - Station list: stations_input/ASOSAWOS-backfill32-input.dat
 #   - Python script: ../3_qaqc_data/QAQC_run_for_single_station.py
 #   - Conda environment: hist-obs
 #
@@ -35,8 +35,8 @@
 ################################################################################
 
 # Job Information:
-#SBATCH --job-name=hist-obs
-#SBATCH --array=1-{NROWS}
+#SBATCH --job-name=hdp-qaqc-bf32
+#SBATCH --array=1-32%8
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -49,12 +49,12 @@
 export HDP_SOURCE_BUCKET="wecc-historical-wx"
 
 # Get the station name for this array task
-STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/{NETWORK}-input.dat)
+STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/ASOSAWOS-backfill32-input.dat)
 
 # AWS credentials
 # Don't need to hard code them in if they are already saved as environment variables
-# export AWS_ACCESS_KEY_ID="put-your-key-id-here"
-# export AWS_SECRET_ACCESS_KEY="put-your-key-here"
+# export AWS_ACCESS_KEY_ID="put-your-key-id-here"  # pragma: allowlist secret
+# export AWS_SECRET_ACCESS_KEY="put-your-key-here"  # pragma: allowlist secret
 # export AWS_DEFAULT_REGION="us-west-2"
 
 # Rename SLURM-generated output and error files to include station name

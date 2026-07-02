@@ -8,7 +8,7 @@
 #   Each SLURM array task handles one station (embarrassingly parallel).
 #
 #   Uses --append mode: reads the station's baseline zarr last timestamp from
-#   the publish bucket and processes only new data since that point.
+#   the source baseline bucket and processes only new data since that point.
 #
 #   Output: s3://wecc-historical-wx/2_clean_wx_append/ASOSAWOS/{STATION}.nc
 #
@@ -39,6 +39,9 @@
 
 REPO_ROOT=/home/ec2-user/hdp-2.0
 
+# Explicit baseline source for append boundary lookup.
+export HDP_SOURCE_BUCKET="wecc-historical-wx"
+
 # Get the station name for this array task
 STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/{NETWORK}-input.dat)
 
@@ -57,6 +60,7 @@ log_file="$NEW_OUT"
 {
   echo "====================================="
   echo "Station: $STATION"
+  echo "Baseline source: s3://${HDP_SOURCE_BUCKET}/4_merge_wx_v2"
   echo "Job Name: $SLURM_JOB_NAME"
   echo "Array Job ID: $SLURM_ARRAY_JOB_ID"
   echo "Task ID: $SLURM_ARRAY_TASK_ID"

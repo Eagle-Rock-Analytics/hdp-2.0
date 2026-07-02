@@ -60,6 +60,22 @@ def load_timestamp_inventory(timestamps_csv: str) -> pd.DataFrame:
     return out
 
 
+def load_missing_inventory(missing_csv: str) -> pd.DataFrame:
+    """Load missing-baseline inventory and mark rows for fallback pulling.
+
+    Expected columns include ``station_id`` and optional status/detail fields.
+    """
+    df = pd.read_csv(missing_csv)
+    if "station_id" not in df.columns:
+        raise ValueError(f"Missing required column in {missing_csv}: ['station_id']")
+
+    out = df.copy()
+    out["station_id"] = out["station_id"].astype(str)
+    out["last_timestamp"] = pd.NaT
+    out["fallback"] = True
+    return out
+
+
 def resolve_s3_target(directory: str) -> tuple[str, str]:
     """Resolve bucket/prefix from either s3://bucket/prefix or prefix-only input."""
     raw = directory.strip()
@@ -167,7 +183,12 @@ def build_pull_groups(
     Returns groups, stats, skipped_offline_df, unknown_end_time_df.
     """
     inventory = inventory_df.copy()
+    if "fallback" not in inventory.columns:
+        inventory["fallback"] = False
+    else:
+        inventory["fallback"] = inventory["fallback"].fillna(False).astype(bool)
     inventory["start_year"] = inventory["start_year"].clip(lower=start_year_floor)
+    inventory.loc[inventory["fallback"], "start_year"] = start_year_floor
 
     merged = inventory.merge(
         station_df,
@@ -417,6 +438,20 @@ def parse_args() -> argparse.Namespace:
         help="CSV from last-timestamp discovery with station_id,last_timestamp.",
     )
     parser.add_argument(
+        "--missing-csv",
+        default="temp/asosawos_last_timestamps_missing.csv",
+        help=(
+            "Optional CSV with stations missing baseline timestamps. "
+            "When provided, these stations are included using fallback start year."
+        ),
+    )
+    parser.add_argument(
+        "--fallback-start-year",
+        type=int,
+        default=1980,
+        help="Start year for stations without baseline timestamps.",
+    )
+    parser.add_argument(
         "--directory",
         default="1_raw_wx/ASOSAWOS/",
         help="Destination raw S3 prefix.",
@@ -476,6 +511,27 @@ def main() -> None:
     print(f"Loading timestamp inventory from {args.timestamps_csv}")
     inventory_df = load_timestamp_inventory(args.timestamps_csv)
     print(f"Loaded inventory rows={len(inventory_df)}")
+
+    if args.missing_csv and os.path.exists(args.missing_csv):
+        print(f"Loading fallback station inventory from {args.missing_csv}")
+        missing_df = load_missing_inventory(args.missing_csv)
+        print(f"Loaded fallback rows={len(missing_df)}")
+        inventory_df = pd.concat([inventory_df, missing_df], ignore_index=True)
+        inventory_df = inventory_df.drop_duplicates(subset=["station_id"], keep="first")
+        if "fallback" in inventory_df.columns:
+            fallback_count = int(inventory_df["fallback"].fillna(False).sum())
+        else:
+            fallback_count = 0
+        print(
+            "Combined inventory after fallback merge: "
+            f"rows={len(inventory_df)}, fallback_rows={fallback_count}"
+        )
+    elif args.missing_csv:
+        print(
+            f"Missing baseline CSV not found at {args.missing_csv}; "
+            "continuing with timestamp inventory only."
+        )
+
     if args.limit is not None:
         print(f"Applying limit={args.limit}")
         inventory_df = inventory_df.head(args.limit).copy()
@@ -496,7 +552,7 @@ def main() -> None:
         station_df=station_df,
         pull_cutoff=pull_cutoff,
         offline_baseline_cutoff=date(2022, 1, 1),
-        start_year_floor=1980,
+        start_year_floor=args.fallback_start_year,
         end_year=end_year,
         include_offline=args.include_offline,
     )
