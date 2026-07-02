@@ -19,7 +19,6 @@
 #SBATCH --time=1:00:00
 #SBATCH --mem=5G
 #SBATCH --partition=compute
-#SBATCH --dependency=afterok:JOBID_PLACEHOLDER
 #SBATCH --output=%x_%A_%a_output.txt
 #SBATCH --error=%x_%A_%a_error.txt
 
