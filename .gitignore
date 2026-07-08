@@ -4,7 +4,8 @@
 
 # uv
 .venv/
-uv.lock
+# uv.lock IS committed: the Dockerfile does `uv sync --frozen` for reproducible
+# container builds, which requires the lockfile to be present in a fresh clone.
 
 # Build artifacts
 dist/
