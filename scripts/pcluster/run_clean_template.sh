@@ -39,8 +39,11 @@
 
 REPO_ROOT=/home/ec2-user/hdp-2.0
 
-# Explicit baseline source for append boundary lookup.
-export HDP_SOURCE_BUCKET="wecc-historical-wx"
+# Staging bucket for clean output + baseline source for append boundary lookup.
+# Override HDP_STAGING_BUCKET=auto-hdp at submit time for an isolated test run;
+# defaults keep production (wecc-historical-wx) behavior unchanged.
+export HDP_STAGING_BUCKET="${HDP_STAGING_BUCKET:-wecc-historical-wx}"
+export HDP_SOURCE_BUCKET="${HDP_SOURCE_BUCKET:-wecc-historical-wx}"
 
 # Get the station name for this array task
 STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/{NETWORK}-input.dat)

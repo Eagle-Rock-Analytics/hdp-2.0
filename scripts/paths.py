@@ -6,16 +6,28 @@ so the pipeline can be redirected without code changes.
 
 Environment variables
 ---------------------
-HDP_BUCKET          : intermediate/staging bucket (default: wecc-historical-wx)
-HDP_SOURCE_BUCKET   : full-history read bucket for append mode (default: HDP_BUCKET)
+HDP_STAGING_BUCKET  : intermediate/staging bucket for pull/clean/QAQC
+                      (default: wecc-historical-wx). Legacy alias: HDP_BUCKET.
+HDP_SOURCE_BUCKET   : full-history read bucket for append mode (default: staging)
 HDP_PUBLISH_BUCKET  : output publish bucket (default: cadcat)
 HDP_PUBLISH_PREFIX  : prefix within publish bucket (default: hdp)
 """
 
 import os
 
-# Staging / intermediate bucket (pull, clean, qaqc intermediates)
-BUCKET_NAME = os.environ.get("HDP_BUCKET", "wecc-historical-wx")
+# Staging / intermediate bucket (pull, clean, QAQC intermediates).
+# Primary env var is HDP_STAGING_BUCKET; the legacy HDP_BUCKET is still honored
+# for backward compatibility. Default: wecc-historical-wx (production).
+# Setting HDP_STAGING_BUCKET=auto-hdp routes all clean/QAQC writes to the test
+# bucket without touching production wecc-historical-wx.
+BUCKET_NAME = (
+    os.environ.get("HDP_STAGING_BUCKET")
+    or os.environ.get("HDP_BUCKET")
+    or "wecc-historical-wx"
+)
+
+# Explicit alias for call sites that reason about the staging bucket by name.
+STAGING_BUCKET = BUCKET_NAME
 
 # Full-history source bucket for append mode. Append runs read the existing
 # full-record clean data from here (typically production wecc-historical-wx)

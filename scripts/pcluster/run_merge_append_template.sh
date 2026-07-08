@@ -41,10 +41,13 @@
 #SBATCH --output=%x_%A_%a_output.txt
 #SBATCH --error=%x_%A_%a_error.txt
 
-# Baseline source + publish target for append repair runs.
-export HDP_SOURCE_BUCKET="wecc-historical-wx"
-export HDP_PUBLISH_BUCKET="auto-hdp"
-export HDP_PUBLISH_PREFIX="hdp"
+# Staging (reads the QAQC _append slice), baseline source, and publish target.
+# Override HDP_STAGING_BUCKET=auto-hdp at submit time for an isolated test run;
+# defaults keep production staging (wecc-historical-wx) unchanged.
+export HDP_STAGING_BUCKET="${HDP_STAGING_BUCKET:-wecc-historical-wx}"
+export HDP_SOURCE_BUCKET="${HDP_SOURCE_BUCKET:-wecc-historical-wx}"
+export HDP_PUBLISH_BUCKET="${HDP_PUBLISH_BUCKET:-auto-hdp}"
+export HDP_PUBLISH_PREFIX="${HDP_PUBLISH_PREFIX:-hdp}"
 
 # Get the station name for this array task
 STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/{NETWORK}-input.dat)

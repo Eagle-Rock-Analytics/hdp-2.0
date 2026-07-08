@@ -78,7 +78,7 @@ Pipeline stages, each in `scripts/<stage>/`:
 3. **3_qaqc_data/** — 10+ modular QA/QC checks per station
 4. **4_merge_data/** — hourly standardization; for the current ASOSAWOS private workflow, use `s3://auto-hdp/hdp/ASOSAWOS/` as the bucket source/target
 
-`scripts/paths.py` is env-var driven — all bucket names come from env vars (`HDP_BUCKET`, `HDP_PUBLISH_BUCKET`, `HDP_PUBLISH_PREFIX`). Never hardcode S3 paths.
+`scripts/paths.py` is env-var driven — all bucket names come from env vars (`HDP_STAGING_BUCKET` (legacy alias `HDP_BUCKET`), `HDP_PUBLISH_BUCKET`, `HDP_PUBLISH_PREFIX`). Never hardcode S3 paths.
 
 ## Conventions & Patterns
 

@@ -54,7 +54,7 @@ Dockerfile                # Single image for all pipeline entrypoints (to be cre
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `HDP_BUCKET` | `wecc-historical-wx` | Staging/intermediate data |
+| `HDP_STAGING_BUCKET` | `wecc-historical-wx` | Staging/intermediate data (pull/clean/QAQC). Legacy alias: `HDP_BUCKET`. Set to `auto-hdp` for isolated test runs. |
 | `HDP_PUBLISH_BUCKET` | `cadcat` | Generic publish bucket default in code; current ASOSAWOS source/validation work uses `auto-hdp` |
 | `HDP_PUBLISH_PREFIX` | `hdp` | Prefix within publish bucket |
 

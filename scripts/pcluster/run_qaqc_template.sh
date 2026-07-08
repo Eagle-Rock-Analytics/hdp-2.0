@@ -45,8 +45,11 @@
 #SBATCH --output=%x_%A_%a_output.txt
 #SBATCH --error=%x_%A_%a_error.txt
 
-# Explicit baseline source for append history lookup.
-export HDP_SOURCE_BUCKET="wecc-historical-wx"
+# Staging bucket for QAQC output + baseline source for append history lookup.
+# Override HDP_STAGING_BUCKET=auto-hdp at submit time for an isolated test run;
+# defaults keep production (wecc-historical-wx) behavior unchanged.
+export HDP_STAGING_BUCKET="${HDP_STAGING_BUCKET:-wecc-historical-wx}"
+export HDP_SOURCE_BUCKET="${HDP_SOURCE_BUCKET:-wecc-historical-wx}"
 
 # Get the station name for this array task
 STATION=$(awk "NR==$SLURM_ARRAY_TASK_ID" stations_input/{NETWORK}-input.dat)
