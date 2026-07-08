@@ -8,36 +8,43 @@ readme = "README.md"
 requires-python = ">=3.10"
 version = "2.0.0"
 dependencies = [
+    # Pipeline runtime only. Notebook / interactive / mapping deps live in the
+    # optional "analysis" extra so the container image stays lean. Keep this
+    # list to what the four pipeline entrypoints (pull/clean/qaqc/merge) import.
     "boto3>=1.24",
-    "cartopy>=0.23",
-    "contextily>=1.2",
     "dask>=2024.2",
     "geopandas>=0.11",
     "h5netcdf>=1.0",
     "h5py>=3.16.0",
-    "intake>=0.7",
-    "intake-esm>=2023.11",
-    "ipykernel>=6.29",
-    "ipython>=8.18",
-    "jupyterlab>=4.0",
     "matplotlib>=3.6",
     "netcdf4>=1.6",
-    "notebook>=7.0",
     "numpy>=1.26",
-    "openpyxl>=3.0",
     "pandas>=2.2",
     "requests>=2.32",
     "s3fs>=2022.11",
     "s3transfer>=0.6",
     "scipy>=1.13",
     "smart_open>=6.3",
-    "statsmodels>=0.14",
     "tqdm>=4.66",
     "xarray>=2023.4",
     "zarr>=2.18,<3",
 ]
 
 [project.optional-dependencies]
+# Interactive analysis, notebooks, and mapping. Not required by the pipeline
+# runtime / container image. Install with `uv sync --extra analysis`.
+analysis = [
+    "cartopy>=0.23",
+    "contextily>=1.2",
+    "intake>=0.7",
+    "intake-esm>=2023.11",
+    "ipykernel>=6.29",
+    "ipython>=8.18",
+    "jupyterlab>=4.0",
+    "notebook>=7.0",
+    "openpyxl>=3.0",
+    "statsmodels>=0.14",
+]
 dev = [
     "black>=24.0",
     "isort>=5.12",

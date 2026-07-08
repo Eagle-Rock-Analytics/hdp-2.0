@@ -1,0 +1,26 @@
+# Keep the build context small and reproducible.
+.git
+.venv
+**/__pycache__/
+**/*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.beads
+.beads-credential-key
+
+# Local run artifacts / logs — never needed in the image.
+qaqc_logs/
+merge_logs/
+figures/
+temp/
+notebooks/
+docs/
+data-access/
+environment/
+
+# Local env / editor
+.env
+.vscode/
+.idea/
+*.log

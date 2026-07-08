@@ -208,7 +208,7 @@ Once Phase 1 is complete, the `infra/` directory will contain CDK stacks (Python
 | Stack | Contents |
 |---|---|
 | `BucketsStack` | `hdp-staging-pull`, `hdp-staging-qaqc` with lifecycle rules; bucket policy on `cadcat` |
-| `ComputeStack` | AWS Batch compute environment (EC2 Spot, `c7i-flex`, `c7g`, `m7i-flex`), job queue, 3 job definitions |
+| `ComputeStack` | AWS Batch compute environment (EC2 Spot, `c7i-flex`, `m7i-flex` — amd64 only; `c7g`/arm64 deferred to scale-up), job queue, 3 job definitions |
 | `OrchestratorStack` | Step Functions state machine (pull → diff → clean → QAQC → merge → notify) |
 | `ScheduleStack` | EventBridge monthly cron (`0 8 1 * ? *`), SNS alert topic, CloudWatch dashboard |
 

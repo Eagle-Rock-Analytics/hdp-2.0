@@ -235,7 +235,7 @@ stations via the same `USW`/`USC` ID namespace.
 - IAM role: read staging-pull, write staging-qaqc, write `s3://auto-hdp/hdp/ASOSAWOS/`
 
 ### P2.3 — Batch compute environment (~3h)
-- EC2 Spot, instance types `c7i-flex.large`, `c7g.large`, `m7i-flex.large`
+- EC2 Spot, instance types `c7i-flex.large`, `m7i-flex.large` (amd64 only; `c7g.large`/arm64 deferred until a multi-arch image exists — revisit at 27-network scale-up)
 - `MAXVCPUS=512`, `SPOT_PRICE_CAPACITY_OPTIMIZED`
 - Job definitions: `hdp-pull-job` (1vCPU/2GB), `hdp-qaqc-job` (1vCPU/4GB, 2h timeout), `hdp-merge-job` (1vCPU/2GB, 1h timeout)
 

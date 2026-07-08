@@ -37,14 +37,25 @@ The design goals are:
 - **Append-only** — processes only new timesteps per station (Phase 0 refactor).
 - **Fault-tolerant** — transient station failures are retried once; non-transient
   failures are captured for investigation and mark the run failed after fanout completes.
-- **Observable** — CloudWatch dashboard, Step Functions execution history, and email
-  alerts on failures.
+- **Observable** — CloudWatch dashboard, Step Functions execution history, a durable
+  DynamoDB run-history table, and an aggregated email summary per run.
 - **Reproducible** — a single Docker image with pinned dependencies handles all
   pipeline stages; no environment drift between runs.
 
 The infrastructure is designed to support all 27 networks, but the first scheduled
 rollout only enables ASOSAWOS. ASOSAWOS and OtherISD use `GHCNh_pull.py` for the
 pull stage; all other networks use their existing pull scripts unchanged.
+
+**Runtime model (locked 2026-07-07):** the pipeline is *per-station
+timestamp-check-first*. A `build-worklist` Lambda reads a DynamoDB **watermark**
+table (`hdp-watermarks`, one row per station) and emits the per-station work array;
+each station then pulls only from its own last timestamp (`--since`, 7-day cutoff).
+Every stage records a per-station outcome (`success` / `failure` / `no-op`) to a
+durable DynamoDB **run-history** table (`hdp-run-history`), which the Notify stage
+reads to compose a single aggregated summary email per run. This supersedes the
+earlier network-pull-then-diff design and the S3-CSV watermark approach. The
+DynamoDB state layer, seeder, and `build-worklist` Lambda are tracked in
+`hdp-gh5.9`.
 
 ---
 
@@ -57,38 +68,43 @@ EventBridge (cron: 1st of month)
 ┌──────────────────────────────────────────────────────────┐
 │                 Step Functions State Machine             │
 │                                                          │
-│  1. Pull-Fanout                                          │
-│     Map over 27 network families                         │
-│     → Batch job: run-pull --network=<X>                  │
+│  1. Build-Worklist (Lambda)                              │
+│     Query DynamoDB hdp-watermarks (one row/station)       │
+│     → Array of {station_id, last_timestamp, network}     │
+│     → Stations already fresh flagged as no-op            │
+│                                                          │
+│  2. Pull-Fanout (Map, per-station)                       │
+│     → Batch job: run-pull --station=<ID>                 │
+│                  --since=<last_timestamp> (7-day cutoff)  │
 │     → Output: s3://hdp-staging-pull/{NETWORK}/           │
 │                                                          │
-│  2. Diff-Stations (Lambda)                               │
-│     Compare staging-pull to last known timestamps        │
-│     → Output: station array for each network             │
+│  3. Clean-Fanout (Map, per-station)                      │
+│     → Batch job: run-clean --station=<ID> --append       │
 │                                                          │
-│  3. Clean-Fanout                                         │
-│     Map over touched stations                            │
-│     → Batch job: run-clean --station=<ID>                │
-│                                                          │
-│  4. QAQC-Fanout (MaxConcurrency=500)                     │
-│     Map over touched stations                            │
-│     → Batch job: run-qaqc --station=<ID>                 │
+│  4. QAQC-Fanout (Map, per-station, MaxConcurrency=500)   │
+│     → Batch job: run-qaqc --station=<ID> --append        │
 │     → Output: s3://hdp-staging-qaqc/{NETWORK}/           │
 │                                                          │
-│  5. Merge-Fanout                                         │
-│     Map over touched stations                            │
-│     → Batch job: run-merge --station=<ID>                │
+│  5. Merge-Fanout (Map, per-station)                      │
+│     → Batch job: run-merge --station=<ID> --append       │
 │     → Output: s3://auto-hdp/hdp/{NETWORK}/{STATION}.zarr │
+│     → On success: update hdp-watermarks last_timestamp   │
 │                                                          │
 │  6. Stationlist-Update (single job)                      │
 │     → runs stnlist_update_*.py for all networks          │
 │                                                          │
-│  7. Notify                                               │
-│     → SNS: email success summary or failure report       │
+│  7. Notify (Lambda → SNS)                                │
+│     → Read hdp-run-history; send ONE aggregated summary  │
+│       email (successes / failures / no-ops)              │
 └──────────────────────────────────────────────────────────┘
-        │                     │
-  CloudWatch            SNS Topic
-  Dashboard                (email)
+        │              │                 │
+  CloudWatch      DynamoDB           SNS Topic
+  Dashboard   hdp-watermarks +        (email)
+              hdp-run-history
+
+Every fanout stage writes a per-station {stage, status, error} row to the
+DynamoDB hdp-run-history table (PK run_id, SK station_id) for durable audit
+and for the aggregated Notify email.
 ```
 
 ---
@@ -231,6 +247,13 @@ hard-wiring cross-account writes into the initial automation.
 
 ### 4.4 AWS Batch Compute Environment
 
+> **Decision (2026-07-08): amd64-only for the ASOSAWOS rollout.** `c7g.large`
+> (arm64 / Graviton) is intentionally dropped because the published image
+> (`hdp:2.0.0`) is single-arch `linux/amd64`. Revisit a multi-arch image
+> (amd64 + arm64 via buildx / manifest list) when scaling beyond ASOSAWOS to all
+> 27 networks, where the wider Spot pool and ~15–20% Graviton price/perf become
+> material. Tracked under `hdp-gh5.8`; compute-env decision on `hdp-gh5.4`.
+
 #### Compute environment
 ```python
 from aws_cdk import aws_batch as batch, aws_ec2 as ec2
@@ -238,8 +261,8 @@ from aws_cdk import aws_batch as batch, aws_ec2 as ec2
 compute_env = batch.ManagedEc2EcsComputeEnvironment(
     self, "HdpCompute",
     instance_types=[
+        # amd64 only — c7g (arm64) dropped until a multi-arch image exists.
         ec2.InstanceType("c7i-flex.large"),
-        ec2.InstanceType("c7g.large"),
         ec2.InstanceType("m7i-flex.large"),
     ],
     use_optimal_instance_classes=False,
@@ -283,12 +306,43 @@ durable private target and not `cadcat`.
 The state machine is defined in AWS CDK using the `aws_stepfunctions` and
 `aws_stepfunctions_tasks` constructs.
 
-#### Stage 1 — Pull-Fanout
-Parallel map over the 27 network families. Each iteration submits a Batch job:
+#### Stage 1 — Build-Worklist (Lambda)
+A small Lambda queries the DynamoDB `hdp-watermarks` table (one row per station)
+and returns the per-station work array `[{station_id, last_timestamp, network}]`
+for the enabled network(s). Stations whose `last_timestamp` is already within the
+freshness window (i.e. no new GHCNh data expected under the 7-day pull cutoff and
+~10-day GHCNh lag) are flagged `no-op` and excluded from the pull array; the no-op
+is still recorded to `hdp-run-history` for that run.
+
+```python
+build_worklist_lambda = lambda_.Function(
+    self, "BuildWorklist",
+    runtime=lambda_.Runtime.PYTHON_3_10,
+    handler="build_worklist.handler",
+    code=lambda_.Code.from_asset("lambda/build_worklist/"),
+    timeout=Duration.minutes(5),
+    memory_size=512,
+    environment={
+        "WATERMARK_TABLE": watermark_table.table_name,
+        "RUN_HISTORY_TABLE": run_history_table.table_name,
+        "PULL_CUTOFF_DAYS": "7",
+    },
+)
+```
+
+The watermark table, its seeder (initial population from the published station
+zarrs), and this Lambda are provisioned in `hdp-gh5.9`. If the work array is empty
+(all stations fresh), the run is a successful no-op unless source freshness
+thresholds are breached.
+
+#### Stage 2 — Pull-Fanout (Map, per-station)
+Parallel `Map` over the work array from Stage 1. Each iteration submits a
+per-station Batch pull job that fetches only from that station's last timestamp
+(`--since`, floored to the 7-day cutoff):
 ```python
 pull_job = sfn_tasks.BatchSubmitJob(
     self, "PullJob",
-    job_name=sfn.JsonPath.string_at("$.network"),
+    job_name=sfn.JsonPath.string_at("$.station_id"),
     job_definition_arn=pull_job_def.job_definition_arn,
     job_queue_arn=job_queue.job_queue_arn,
     container_overrides=sfn_tasks.BatchContainerOverrides(
@@ -302,64 +356,52 @@ pull_job = sfn_tasks.BatchSubmitJob(
 
 pull_fanout = sfn.Map(
     self, "PullFanout",
-    items_path=sfn.JsonPath.string_at("$.networks"),
-    max_concurrency=27,
+    items_path=sfn.JsonPath.string_at("$.worklist"),
+    max_concurrency=500,
 ).iterator(pull_job)
 ```
 
-#### Stage 2 — Diff-Stations (Lambda)
-A small Lambda function lists modified objects in `hdp-staging-pull` since the
-last-known per-station timestamps, returning an array of `{station_id, network}`
-objects for the next fanout stages.
-
-```python
-diff_lambda = lambda_.Function(
-    self, "DiffStations",
-    runtime=lambda_.Runtime.PYTHON_3_10,
-    handler="diff_stations.handler",
-    code=lambda_.Code.from_asset("lambda/diff_stations/"),
-    timeout=Duration.minutes(5),
-    memory_size=512,
-)
-```
-
-The Lambda reads the per-station timestamp CSV from S3 (written by
-`discover_last_timestamps_asosawos.py`), compares against `hdp-staging-pull`
-object `LastModified`, and returns touched stations. For networks without a
-per-station timestamp CSV (non-ASOSAWOS), it falls back to comparing against a
-network-level watermark. If zero touched stations are found, the run is treated
-as a successful no-op unless the source freshness thresholds are breached.
-
-#### Stages 3–5 — Clean/QAQC/Merge Fanout
-Each stage is a `Map` state over the touched-station array from Stage 2. The QAQC
-fanout uses `MaxConcurrency=500` (Batch handles the actual concurrency limit via
+#### Stages 3–5 — Clean / QAQC / Merge Fanout
+Each stage is a `Map` state over the per-station work array. Clean and QAQC fan
+out per station (QAQC uses `MaxConcurrency=500`; Batch enforces the real limit via
 the compute environment `maxVCpus`):
 
 ```python
 qaqc_fanout = sfn.Map(
     self, "QaqcFanout",
-    items_path=sfn.JsonPath.string_at("$.touched_stations"),
+    items_path=sfn.JsonPath.string_at("$.worklist"),
     max_concurrency=500,
 ).iterator(qaqc_job_task)
 ```
 
-Each task passes `--append` to the job command. Failed stations are classified as
-transient or non-transient. Transient failures are retried once using Step Functions
-`Retry` plus Batch retry strategy. Non-transient failures are recorded, processing
-continues for remaining stations, and the overall execution ends in failure-for-
-investigation if any non-transient station failure remains after the retry path.
+Each task passes `--append` to the job command. The **merge** stage (Stage 5) is
+the watermark writer: on a successful per-station merge into `auto-hdp`, the job
+updates that station's row in `hdp-watermarks` with the new `last_timestamp`. Every
+stage writes a `{run_id, station_id, stage, status, error}` row to `hdp-run-history`.
+
+Failed stations are classified as transient or non-transient. Transient failures
+are retried once using Step Functions `Retry` plus the Batch retry strategy.
+Non-transient failures are recorded to `hdp-run-history`, processing continues for
+remaining stations, and the overall execution ends in failure-for-investigation if
+any non-transient station failure remains after the retry path.
 
 #### Stage 6 — Stationlist-Update
 A single Batch job runs `stnlist_update_qaqc.py` and `stnlist_update_merge.py`
 for all networks in sequence. This stage runs only after all merge jobs complete.
 
 #### Stage 7 — Notify
-An SNS publish task sends an email success or failure summary. The payload includes:
-- Total stations processed.
-- Count of failures (with station IDs).
+A Notify Lambda reads the `hdp-run-history` rows for this `run_id`, composes a
+single aggregated summary, and publishes it via SNS as **one email per run** to
+`neil.schroeder@eaglerockanalytics.com` (not one email per station). The summary
+includes:
+- Total stations processed, plus counts of success / failure / no-op.
+- The list of failed station IDs with their error classes.
 - Wall-clock duration of the state machine execution.
-- Link to CloudWatch dashboard.
-- Source freshness status and whether the run was a no-op.
+- Link to the CloudWatch dashboard.
+- Source freshness status and whether the whole run was a no-op.
+
+A separate CloudWatch alarm still fires an immediate SNS alert on a
+state-machine-level `FAILED` execution.
 
 ---
 
@@ -385,6 +427,7 @@ rule.add_target(targets.SfnStateMachine(
     state_machine,
     input=events.RuleTargetInput.from_object({
         "networks": NETWORK_LIST,
+        "run_id": events.EventField.from_path("$.id"),
         "run_date": events.EventField.from_path("$.time"),
         "triggered_by": "eventbridge-monthly",
     }),
@@ -439,13 +482,14 @@ failure_alarm.add_alarm_action(cw_actions.SnsAction(alert_topic))
 
 ## 5. CDK Stack Breakdown
 
-The `infra/` directory will contain four CDK stacks. They should be deployed in order:
+The `infra/` directory will contain five CDK stacks. They should be deployed in order:
 
 | Stack | Class | Depends on | Contents |
 |---|---|---|---|
 | `BucketsStack` | `HdpBucketsStack` | — | Staging buckets (`hdp-staging-pull`, `hdp-staging-qaqc`); private publish target policy/retention |
-| `ComputeStack` | `HdpComputeStack` | `BucketsStack` | ECR repo; Batch compute env, job queue, 4 job definitions; IAM role |
-| `OrchestratorStack` | `HdpOrchestratorStack` | `ComputeStack` | Step Functions state machine; diff-stations Lambda; SNS email topic |
+| `StateStack` | `HdpStateStack` | `BucketsStack` | DynamoDB `hdp-watermarks` + `hdp-run-history` tables (on-demand); `build-worklist` Lambda (see `hdp-gh5.9`) |
+| `ComputeStack` | `HdpComputeStack` | `StateStack` | ECR repo; Batch compute env, job queue, 4 job definitions; IAM role (incl. DynamoDB read/write) |
+| `OrchestratorStack` | `HdpOrchestratorStack` | `ComputeStack` | Step Functions state machine; `build-worklist` + `notify` Lambdas; SNS email topic |
 | `ScheduleStack` | `HdpScheduleStack` | `OrchestratorStack` | EventBridge monthly cron (disabled by default); CloudWatch dashboard; failure alarms |
 
 ```
@@ -453,12 +497,16 @@ infra/
 ├── app.py                     # CDK app entry point
 ├── stacks/
 │   ├── buckets_stack.py
+│   ├── state_stack.py
 │   ├── compute_stack.py
 │   ├── orchestrator_stack.py
 │   └── schedule_stack.py
 └── lambda/
-    └── diff_stations/
-        ├── diff_stations.py
+    ├── build_worklist/        # Stage 1: read hdp-watermarks → work array
+    │   ├── build_worklist.py
+    │   └── requirements.txt
+    └── notify/                # Stage 7: read hdp-run-history → summary email
+        ├── notify.py
         └── requirements.txt
 ```
 
@@ -468,7 +516,8 @@ app = cdk.App()
 env = cdk.Environment(account=os.environ["CDK_ACCOUNT"], region="us-west-2")
 
 buckets  = HdpBucketsStack(app,      "HdpBuckets",      env=env)
-compute  = HdpComputeStack(app,      "HdpCompute",      buckets_stack=buckets,    env=env)
+state    = HdpStateStack(app,        "HdpState",        buckets_stack=buckets,    env=env)
+compute  = HdpComputeStack(app,      "HdpCompute",      state_stack=state,        env=env)
 orch     = HdpOrchestratorStack(app, "HdpOrchestrator", compute_stack=compute,    env=env)
 schedule = HdpScheduleStack(app,     "HdpSchedule",     orchestrator_stack=orch,  env=env)
 ```
@@ -482,7 +531,7 @@ schedule = HdpScheduleStack(app,     "HdpSchedule",     orchestrator_stack=orch,
 - [ ] Write `docker/entrypoint.sh` routing `run-pull`, `run-clean`, `run-qaqc`, `run-merge`
 - [ ] Build and verify all four entrypoints locally
 - [ ] Run smoke test: `docker run hdp:latest run-qaqc --station=CW3E_HDC --dry-run`
-- [ ] GHCNh smoke test: `docker run hdp:latest run-pull --network=ASOSAWOS --since=2026-06-01 --dry-run`
+- [ ] GHCNh smoke test: `docker run hdp:latest run-pull --station=ASOSAWOS_72290993115 --since=2026-06-01 --dry-run`
 - [ ] Push to ECR
 - [ ] Document image tag strategy (semver vs `:latest`)
 
@@ -496,7 +545,7 @@ schedule = HdpScheduleStack(app,     "HdpSchedule",     orchestrator_stack=orch,
 
 ### P2.3 — Batch compute (~3h)
 - [ ] Create `HdpComputeStack` CDK stack
-- [ ] Compute environment: EC2 Spot, `c7i-flex.large` / `c7g.large` / `m7i-flex.large`, maxVCpus=512
+- [ ] Compute environment: EC2 Spot, `c7i-flex.large` / `m7i-flex.large` (amd64 only; `c7g` deferred), maxVCpus=512
 - [ ] Job queue with priority ordering
 - [ ] Job definitions: pull, clean, qaqc, merge
 - [ ] Manual Batch job submission test (bypassing Step Functions)
@@ -504,11 +553,13 @@ schedule = HdpScheduleStack(app,     "HdpSchedule",     orchestrator_stack=orch,
 
 ### P2.4 — Step Functions (~8h)
 - [ ] Create `HdpOrchestratorStack` CDK stack
-- [ ] Write `diff_stations` Lambda (compare staging-pull against per-station watermarks)
-- [ ] State machine: Pull-Fanout → Diff → Clean-Fanout → QAQC-Fanout → Merge-Fanout → Stationlist-Update → Notify
-- [ ] Implement zero-touched-station no-op behavior with source freshness reporting
+- [ ] Write `build_worklist` Lambda (read `hdp-watermarks`, emit per-station work array, flag no-ops under 7-day cutoff)
+- [ ] Write `notify` Lambda (read `hdp-run-history` for the run, send one aggregated summary email)
+- [ ] State machine: Build-Worklist → Pull-Fanout → Clean-Fanout → QAQC-Fanout → Merge-Fanout → Stationlist-Update → Notify
+- [ ] Merge stage updates `hdp-watermarks`; every stage writes `hdp-run-history`
+- [ ] Implement zero-work no-op behavior with source freshness reporting
 - [ ] Implement one retry for transient failures and fail-for-investigation behavior for non-transient station failures
-- [ ] Unit test `diff_stations` Lambda locally with mock S3 events
+- [ ] Unit test `build_worklist` and `notify` Lambdas locally with mocked DynamoDB
 - [ ] Manual trigger of state machine with 1-station and 5-station ASOSAWOS subsets
 - [ ] Verify email alert delivery with an intentionally broken station
 

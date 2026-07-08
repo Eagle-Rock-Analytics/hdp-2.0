@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test lint format security pre-commit clean
+.PHONY: help install install-analysis install-dev test lint format security pre-commit clean
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -6,11 +6,14 @@ help: ## Show this help message
 	@echo 'Targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-install: ## Install project dependencies
+install: ## Install pipeline runtime dependencies only (matches container image)
 	uv sync
 
-install-dev: ## Install project + dev dependencies, set up pre-commit
-	uv sync --extra dev
+install-analysis: ## Install runtime + notebook/mapping analysis dependencies
+	uv sync --extra analysis
+
+install-dev: ## Install project + analysis + dev dependencies, set up pre-commit
+	uv sync --extra analysis --extra dev
 	uv run pre-commit install
 
 test: ## Run tests
