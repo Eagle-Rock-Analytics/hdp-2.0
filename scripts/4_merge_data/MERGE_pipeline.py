@@ -53,6 +53,7 @@ from paths import (
     SOURCE_BUCKET,
     STATIONS_CSV_PATH,
 )
+from stage_exit_codes import StageExit
 
 
 def read_station_metadata(s3_path: str, logger: logging.Logger) -> pd.DataFrame:
@@ -161,9 +162,17 @@ def read_zarr_dataset(
 
 def read_append_input_dataset(
     bucket: str, qaqc_dir: str, network: str, station: str, logger: logging.Logger
-) -> xr.Dataset:
+) -> xr.Dataset | None:
     """Load append-mode QAQC slice from the staging QAQC key on S3."""
     s3_uri = f"s3://{bucket}/{qaqc_dir}/{network}/{QAQC_APPEND}/{station}.zarr/"
+    fs = s3fs.S3FileSystem()
+    if not fs.exists(s3_uri):
+        logger.info(
+            "Append QAQC slice missing at %s; treating merge as NOOP for station %s.",
+            s3_uri,
+            station,
+        )
+        return None
     try:
         station_ds = xr.open_zarr(s3_uri)
     except Exception as e:
@@ -579,7 +588,7 @@ def run_merge_one_station(
     station: str,
     verbose: bool = False,
     append: bool = False,
-) -> None:
+) -> StageExit:
     """
     Main entry point for running the merge pipeline for a single station.
 
@@ -597,7 +606,9 @@ def run_merge_one_station(
 
     Returns
     -------
-    None
+    StageExit
+        Three-state stage outcome for orchestration:
+        SUCCESS (0), NOOP (3), or FAILURE (1).
 
     """
 
@@ -615,6 +626,8 @@ def run_merge_one_station(
     # Validate station and get network name
     network_name = validate_station(station, stations_df, logger)
 
+    stage_result = StageExit.SUCCESS
+
     try:
 
         ## ======== READ IN AND REFORMAT DATA ========
@@ -624,6 +637,9 @@ def run_merge_one_station(
             ds = read_append_input_dataset(
                 BUCKET_NAME, QAQC_WX, network_name, station, logger
             )
+            if ds is None:
+                stage_result = StageExit.NOOP
+                return stage_result
         else:
             ds = read_zarr_dataset(BUCKET_NAME, QAQC_WX, network_name, station, logger)
 
@@ -631,7 +647,8 @@ def run_merge_one_station(
             logger.info(
                 "Append input slice has zero rows. Skipping merge write and leaving baseline zarr unchanged."
             )
-            return
+            stage_result = StageExit.NOOP
+            return stage_result
 
         # Get variable attributes from dataset
         var_attrs = get_var_attrs(ds, network_name, logger)
@@ -712,10 +729,12 @@ def run_merge_one_station(
 
         # Done! Print elapsed time
         logger.info(f"Finished processing station: {station}")
+        stage_result = StageExit.SUCCESS
 
     except Exception as e:
         logger.info(f"Error traceback: {type(e).__name__}: {e}")
         logger.info("Terminating merge script.")
+        stage_result = StageExit.FAILURE
 
     finally:  # Even in case of failure, upload logfile to s3
 
@@ -729,3 +748,5 @@ def run_merge_one_station(
 
         print("Script complete.")
         print(f"Elapsed time: {formatted_elapsed}")
+
+    return stage_result

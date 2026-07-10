@@ -31,11 +31,12 @@ python QAQC_run_for_single_station.py --station="CW3E_HDC"
 """
 
 import argparse
+import sys
 
 from QAQC_pipeline import run_qaqc_one_station
 
 
-def main():
+def main() -> int:
     """
     This function is designed to create an argument parser, define the arguments for the script, parse the argument, and then run the QAQC pipeline for the specified station.
 
@@ -94,13 +95,14 @@ def main():
     args = parser.parse_args()
 
     # Run the QAQC pipeline for the specified station
-    run_qaqc_one_station(
+    result = run_qaqc_one_station(
         station=args.station,
         verbose=args.verbose,
         rad_scheme=args.rad_scheme,
         append=args.append,
     )
+    return int(result)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

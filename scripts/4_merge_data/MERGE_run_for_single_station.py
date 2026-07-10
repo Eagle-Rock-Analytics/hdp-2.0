@@ -20,11 +20,12 @@ python MERGE_run_for_single_station.py --station="ASOSAWOS_69007093217" --verbos
 """
 
 import argparse
+import sys
 
 from MERGE_pipeline import run_merge_one_station
 
 
-def main():
+def main() -> int:
     """
     Parses command-line arguments and runs the MERGE pipeline for a single weather station.
 
@@ -81,12 +82,13 @@ def main():
     args = parser.parse_args()
 
     # Run the QAQC pipeline for the specified station
-    run_merge_one_station(
+    result = run_merge_one_station(
         station=args.station,
         verbose=args.verbose,
         append=args.append,  # type: ignore[call-arg]
     )
+    return int(result)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -71,6 +71,7 @@ from paths import (
     RAW_WX,
     SOURCE_BUCKET,
 )
+from stage_exit_codes import StageExit
 
 s3 = boto3.resource("s3")
 s3_cl = boto3.client("s3")
@@ -456,7 +457,7 @@ def clean_ghcnh(
     append: bool = False,
     start_date: datetime | None = None,
     bucket: str = BUCKET_NAME,
-) -> None:
+) -> StageExit:
     """Clean GHCNh Parquet data for a list of HDP station IDs.
 
     Parameters
@@ -475,6 +476,7 @@ def clean_ghcnh(
         S3 bucket for both input and output.
     """
     errors: dict[str, list] = {"File": [], "Time": [], "Error": []}
+    writes = 0
     end_api = datetime.now().strftime("%Y%m%d%H%M")
     timestamp = datetime.now(tz=timezone.utc).strftime("%m-%d-%Y, %H:%M:%S")
 
@@ -567,6 +569,7 @@ def clean_ghcnh(
             os.remove(f"temp/temp_ghcnh_{station_id}.nc")
             print(f"  Saved {filename} ({ds.dims}) -> s3://{bucket}/{filepath}")
             ds.close()
+            writes += 1
 
         except Exception as exc:
             traceback.print_exc()
@@ -585,6 +588,12 @@ def clean_ghcnh(
     )
     if not errors_df.empty:
         print(f"  {len(errors_df)} error(s) — see errors_ghcnh_clean_{end_api}.csv")
+
+    if not errors_df.empty:
+        return StageExit.FAILURE
+    if writes == 0:
+        return StageExit.NOOP
+    return StageExit.SUCCESS
 
 
 # ---------------------------------------------------------------------------
@@ -635,7 +644,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
+def main() -> int:
     parser = _build_arg_parser()
     args = parser.parse_args()
 
@@ -651,19 +660,20 @@ def main() -> None:
 
     if not station_ids:
         print("No stations to process. Exiting.")
-        return
+        return int(StageExit.NOOP)
 
     start_date: datetime | None = None
     if args.append and args.start_date:
         start_date = datetime.strptime(args.start_date, "%Y-%m-%d")
 
-    clean_ghcnh(
+    result = clean_ghcnh(
         station_ids=station_ids,
         append=args.append,
         start_date=start_date,
         bucket=args.bucket,
     )
+    return int(result)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

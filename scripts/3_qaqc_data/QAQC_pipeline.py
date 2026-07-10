@@ -45,6 +45,7 @@ from paths import (
     SOURCE_BUCKET,
     STATIONS_CSV_PATH,
 )
+from stage_exit_codes import StageExit
 
 try:
     from log_config import setup_logger
@@ -1135,7 +1136,7 @@ def run_qaqc_one_station(
     verbose: bool = False,
     rad_scheme: str = "remove_zeros",
     append: bool = False,
-):
+) -> StageExit:
     """
     Runs the full QA/QC pipeline on a single weather station dataset.
 
@@ -1167,7 +1168,9 @@ def run_qaqc_one_station(
 
     Returns
     -------
-    None
+    StageExit
+        Three-state stage outcome for orchestration:
+        SUCCESS (0), NOOP (3), or FAILURE (1).
     """
 
     ## ======== BASIC SETUP ========
@@ -1179,7 +1182,7 @@ def run_qaqc_one_station(
     # Check that the input station exists in the station list :)
     if len(station_row) == 0:
         print(f"No file found in records for station {station}.")
-        return None
+        return StageExit.FAILURE
 
     # Get the network and directories for network data in AWS
     network = station_row["network"].item()
@@ -1209,6 +1212,13 @@ def run_qaqc_one_station(
     if append:
         # --append: read new slice from staging clean key (working bucket)
         aws_url = f"s3://{BUCKET_NAME}/{cleaned_data_dir}{CLEAN_APPEND}/{station}.nc"
+        if not fs.exists(aws_url):
+            logger.info(
+                "Append input slice missing at %s; treating as NOOP for station %s.",
+                aws_url,
+                station,
+            )
+            return StageExit.NOOP
     else:
         # Normal: read from full-history clean key (working bucket)
         aws_url_no_extension = f"s3://{BUCKET_NAME}/{cleaned_data_dir}{station}"
@@ -1228,10 +1238,10 @@ def run_qaqc_one_station(
                 logger.info("Dataset read successfully. Loading into memory...")
                 ds = ds.load()
     except Exception as e:
-        print(
+        logger.error(
             f"{station} did not pass QA/QC because the file could not be opened and/or found in AWS. File path: {aws_url}\nError: {e}"
         )
-        exit()  # End script here
+        return StageExit.FAILURE
 
     logger.info(
         f"Done reading. Ellapsed time: {time.time() - t0} s.\n",
@@ -1288,6 +1298,7 @@ def run_qaqc_one_station(
     ## ======== RUN FULL QAQC PIPELINE =========
     logger.info(f"Running QA/QC on: {station}\n")
     try:
+        stage_result = StageExit.SUCCESS
         # Run main QAQC functions
         test = "run_qaqc_pipeline"  # Used for making error message
         df, attrs, var_attrs, era_qc_vars = run_qaqc_pipeline(
@@ -1304,7 +1315,8 @@ def run_qaqc_one_station(
             # No data is returned by qaqc_pipeline
             # Error handling should have happened within run_qaqc_pipeline
             # Thus, just skip right to the finally section
-            return
+            stage_result = StageExit.FAILURE
+            return stage_result
 
         # Save file
         # Attributes are assigned to dataset
@@ -1330,6 +1342,7 @@ def run_qaqc_one_station(
             message=f"{test} failed with error: {e}",
             test=test,
         )
+        stage_result = StageExit.FAILURE
 
     ## ======== FINISH =========
     finally:
@@ -1360,4 +1373,4 @@ def run_qaqc_one_station(
             handler.close()
             logger.removeHandler(handler)
 
-    return None
+    return stage_result
