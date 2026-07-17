@@ -9,6 +9,8 @@ from aws_cdk import (
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_sns as sns
+from aws_cdk import aws_sns_subscriptions as subs
 from constructs import Construct
 
 
@@ -61,6 +63,12 @@ class HdpStateStack(Stack):
 
         watermark_table.grant_read_data(lambda_role)
         run_history_table.grant_write_data(lambda_role)
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["cloudwatch:PutMetricData"],
+                resources=["*"],
+            )
+        )
 
         lambda_code_path = str(
             Path(__file__).resolve().parent.parent / "lambda" / "build_worklist"
@@ -99,6 +107,22 @@ class HdpStateStack(Stack):
                 resources=["*"],
             )
         )
+        summarize_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["cloudwatch:PutMetricData"],
+                resources=["*"],
+            )
+        )
+
+        alert_topic = sns.Topic(
+            self,
+            "Phase2AlertsTopic",
+            topic_name="hdp-phase2-alerts",
+            display_name="HDP Phase 2 Alerts",
+        )
+        alert_topic.add_subscription(
+            subs.EmailSubscription("neil.schroeder@eaglerockanalytics.com")
+        )
 
         summarize_code_path = str(
             Path(__file__).resolve().parent.parent / "lambda" / "summarize_run"
@@ -115,7 +139,7 @@ class HdpStateStack(Stack):
             role=summarize_role,
             environment={
                 "RUN_HISTORY_TABLE": run_history_table.table_name,
-                "SNS_TOPIC_ARN": "",
+                "SNS_TOPIC_ARN": alert_topic.topic_arn,
             },
         )
 
@@ -127,3 +151,4 @@ class HdpStateStack(Stack):
         CfnOutput(
             self, "SummarizeRunLambdaName", value=summarize_run_lambda.function_name
         )
+        CfnOutput(self, "AlertsTopicArn", value=alert_topic.topic_arn)

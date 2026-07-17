@@ -3,8 +3,13 @@ from aws_cdk import (
     Duration,
     Stack,
 )
+from aws_cdk import aws_cloudwatch as cloudwatch
+from aws_cdk import aws_cloudwatch_actions as cw_actions
 from aws_cdk import aws_dynamodb as dynamodb
+from aws_cdk import aws_events as events
+from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_sns as sns
 from aws_cdk import aws_stepfunctions as sfn
 from aws_cdk import aws_stepfunctions_tasks as sfn_tasks
 from constructs import Construct
@@ -26,6 +31,11 @@ class HdpOrchestratorStack(Stack):
             self,
             "SummarizeRunLambdaRef",
             "hdp-summarize-run",
+        )
+        alert_topic = sns.Topic.from_topic_arn(
+            self,
+            "Phase2AlertsTopicRef",
+            f"arn:aws:sns:{region}:{account}:hdp-phase2-alerts",
         )
 
         run_history_table = dynamodb.Table.from_table_name(
@@ -535,4 +545,177 @@ class HdpOrchestratorStack(Stack):
             timeout=Duration.hours(24),
         )
 
+        workflow_failed_alarm = cloudwatch.Alarm(
+            self,
+            "WorkflowFailedAlarm",
+            alarm_name="hdp-phase2-workflow-failed",
+            metric=state_machine.metric_failed(
+                period=Duration.hours(1),
+                statistic="sum",
+            ),
+            threshold=1,
+            evaluation_periods=1,
+            datapoints_to_alarm=1,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="State machine execution failures for HDP Phase 2.",
+        )
+
+        station_failure_alarm = cloudwatch.Alarm(
+            self,
+            "StationFailureAlarm",
+            alarm_name="hdp-phase2-station-failures",
+            metric=cloudwatch.Metric(
+                namespace="HDP/Phase2",
+                metric_name="StationFailureCount",
+                dimensions_map={"Network": "ASOSAWOS"},
+                period=Duration.hours(1),
+                statistic="sum",
+            ),
+            threshold=0,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            evaluation_periods=1,
+            datapoints_to_alarm=1,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description=(
+                "Non-transient per-station failures detected in HDP Phase 2 runs."
+            ),
+        )
+
+        freshness_breach_alarm = cloudwatch.Alarm(
+            self,
+            "FreshnessBreachAlarm",
+            alarm_name="hdp-phase2-source-freshness-breach",
+            metric=cloudwatch.Metric(
+                namespace="HDP/Phase2",
+                metric_name="FreshnessBreaches",
+                dimensions_map={"Network": "ASOSAWOS"},
+                period=Duration.hours(1),
+                statistic="sum",
+            ),
+            threshold=0,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            evaluation_periods=1,
+            datapoints_to_alarm=1,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="Source freshness threshold breached for one or more stations.",
+        )
+
+        for alarm in [
+            workflow_failed_alarm,
+            station_failure_alarm,
+            freshness_breach_alarm,
+        ]:
+            alarm.add_alarm_action(cw_actions.SnsAction(alert_topic))
+
+        schedule_rule = events.Rule(
+            self,
+            "MonthlyPhase2Schedule",
+            rule_name="hdp-phase2-monthly",
+            description="Monthly HDP Phase 2 schedule (disabled by default).",
+            enabled=False,
+            schedule=events.Schedule.cron(minute="0", hour="8", day="1"),
+        )
+        schedule_rule.add_target(
+            targets.SfnStateMachine(
+                state_machine,
+                input=events.RuleTargetInput.from_object({"network": "ASOSAWOS"}),
+            )
+        )
+
+        dashboard = cloudwatch.Dashboard(
+            self,
+            "Phase2Dashboard",
+            dashboard_name="hdp-phase2-ops",
+        )
+        dashboard.add_widgets(
+            cloudwatch.GraphWidget(
+                title="Batch Success (Station Outcomes)",
+                left=[
+                    cloudwatch.Metric(
+                        namespace="HDP/Phase2",
+                        metric_name="StationSuccessCount",
+                        dimensions_map={"Network": "ASOSAWOS"},
+                        statistic="sum",
+                        period=Duration.hours(1),
+                    ),
+                    cloudwatch.Metric(
+                        namespace="HDP/Phase2",
+                        metric_name="StationNoOpCount",
+                        dimensions_map={"Network": "ASOSAWOS"},
+                        statistic="sum",
+                        period=Duration.hours(1),
+                    ),
+                ],
+            ),
+            cloudwatch.GraphWidget(
+                title="Workflow Duration and Failures",
+                left=[
+                    state_machine.metric_time(
+                        period=Duration.hours(1),
+                        statistic="average",
+                    ),
+                    state_machine.metric_failed(
+                        period=Duration.hours(1),
+                        statistic="sum",
+                    ),
+                ],
+            ),
+        )
+        dashboard.add_widgets(
+            cloudwatch.GraphWidget(
+                title="Private Target Object Deltas",
+                left=[
+                    cloudwatch.Metric(
+                        namespace="HDP/Phase2",
+                        metric_name="PrivateTargetObjectDelta",
+                        dimensions_map={"Network": "ASOSAWOS"},
+                        statistic="sum",
+                        period=Duration.hours(1),
+                    )
+                ],
+            ),
+            cloudwatch.GraphWidget(
+                title="Source Freshness",
+                left=[
+                    cloudwatch.Metric(
+                        namespace="HDP/Phase2",
+                        metric_name="FreshnessBreaches",
+                        dimensions_map={"Network": "ASOSAWOS"},
+                        statistic="sum",
+                        period=Duration.hours(1),
+                    ),
+                    cloudwatch.Metric(
+                        namespace="HDP/Phase2",
+                        metric_name="WorkItemCount",
+                        dimensions_map={"Network": "ASOSAWOS"},
+                        statistic="sum",
+                        period=Duration.hours(1),
+                    ),
+                ],
+            ),
+        )
+        dashboard.add_widgets(
+            cloudwatch.SingleValueWidget(
+                title="Station Failure Summary",
+                metrics=[
+                    cloudwatch.Metric(
+                        namespace="HDP/Phase2",
+                        metric_name="StationFailureCount",
+                        dimensions_map={"Network": "ASOSAWOS"},
+                        statistic="sum",
+                        period=Duration.hours(1),
+                    ),
+                    cloudwatch.Metric(
+                        namespace="HDP/Phase2",
+                        metric_name="StationsTotal",
+                        dimensions_map={"Network": "ASOSAWOS"},
+                        statistic="sum",
+                        period=Duration.hours(1),
+                    ),
+                ],
+            )
+        )
+
         CfnOutput(self, "StateMachineArn", value=state_machine.state_machine_arn)
+        CfnOutput(self, "ScheduleRuleName", value=schedule_rule.rule_name)
+        CfnOutput(self, "DashboardName", value=dashboard.dashboard_name)

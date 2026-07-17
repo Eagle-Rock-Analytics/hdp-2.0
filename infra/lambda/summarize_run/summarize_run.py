@@ -29,6 +29,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         raise ValueError("run_id is required")
 
     ddb = boto3.client("dynamodb")
+    cw = boto3.client("cloudwatch")
     paginator = ddb.get_paginator("query")
 
     rows: list[dict[str, Any]] = []
@@ -50,6 +51,42 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         "unknown": counts["unknown"],
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    cw.put_metric_data(
+        Namespace="HDP/Phase2",
+        MetricData=[
+            {
+                "MetricName": "StationsTotal",
+                "Dimensions": [{"Name": "Network", "Value": network}],
+                "Value": float(summary["total"]),
+                "Unit": "Count",
+            },
+            {
+                "MetricName": "StationSuccessCount",
+                "Dimensions": [{"Name": "Network", "Value": network}],
+                "Value": float(summary["success"]),
+                "Unit": "Count",
+            },
+            {
+                "MetricName": "StationFailureCount",
+                "Dimensions": [{"Name": "Network", "Value": network}],
+                "Value": float(summary["failure"]),
+                "Unit": "Count",
+            },
+            {
+                "MetricName": "StationNoOpCount",
+                "Dimensions": [{"Name": "Network", "Value": network}],
+                "Value": float(summary["no_op"]),
+                "Unit": "Count",
+            },
+            {
+                "MetricName": "PrivateTargetObjectDelta",
+                "Dimensions": [{"Name": "Network", "Value": network}],
+                "Value": float(summary["success"]),
+                "Unit": "Count",
+            },
+        ],
+    )
 
     if sns_topic_arn:
         sns = boto3.client("sns")

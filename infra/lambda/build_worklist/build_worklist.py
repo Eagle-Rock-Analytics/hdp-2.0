@@ -50,6 +50,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     threshold_epoch = now.timestamp() - freshness_days * 24 * 60 * 60
 
     ddb = boto3.client("dynamodb")
+    cw = boto3.client("cloudwatch")
 
     paginator = ddb.get_paginator("scan")
     work_items: list[dict[str, str]] = []
@@ -87,13 +88,45 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
             else:
                 work_items.append(base)
 
-    return {
+    result = {
         "run_id": run_id,
         "network": network_filter,
         "total_station_count": len(work_items) + len(no_ops),
         "work_items": work_items,
         "no_ops": no_ops,
     }
+
+    cw.put_metric_data(
+        Namespace="HDP/Phase2",
+        MetricData=[
+            {
+                "MetricName": "TotalStations",
+                "Dimensions": [{"Name": "Network", "Value": network_filter}],
+                "Value": float(result["total_station_count"]),
+                "Unit": "Count",
+            },
+            {
+                "MetricName": "WorkItemCount",
+                "Dimensions": [{"Name": "Network", "Value": network_filter}],
+                "Value": float(len(work_items)),
+                "Unit": "Count",
+            },
+            {
+                "MetricName": "NoOpCount",
+                "Dimensions": [{"Name": "Network", "Value": network_filter}],
+                "Value": float(len(no_ops)),
+                "Unit": "Count",
+            },
+            {
+                "MetricName": "FreshnessBreaches",
+                "Dimensions": [{"Name": "Network", "Value": network_filter}],
+                "Value": float(len(work_items)),
+                "Unit": "Count",
+            },
+        ],
+    )
+
+    return result
 
 
 if __name__ == "__main__":
