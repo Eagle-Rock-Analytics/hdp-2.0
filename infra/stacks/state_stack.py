@@ -82,8 +82,48 @@ class HdpStateStack(Stack):
             },
         )
 
+        summarize_role = iam.Role(
+            self,
+            "SummarizeRunLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole"
+                )
+            ],
+        )
+        run_history_table.grant_read_data(summarize_role)
+        summarize_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["sns:Publish"],
+                resources=["*"],
+            )
+        )
+
+        summarize_code_path = str(
+            Path(__file__).resolve().parent.parent / "lambda" / "summarize_run"
+        )
+
+        summarize_run_lambda = lambda_.Function(
+            self,
+            "SummarizeRunLambda",
+            function_name="hdp-summarize-run",
+            runtime=lambda_.Runtime.PYTHON_3_10,
+            handler="summarize_run.handler",
+            code=lambda_.Code.from_asset(summarize_code_path),
+            timeout=Duration.seconds(60),
+            role=summarize_role,
+            environment={
+                "RUN_HISTORY_TABLE": run_history_table.table_name,
+                "SNS_TOPIC_ARN": "",
+            },
+        )
+
         CfnOutput(self, "WatermarkTableName", value=watermark_table.table_name)
         CfnOutput(self, "RunHistoryTableName", value=run_history_table.table_name)
         CfnOutput(
             self, "BuildWorklistLambdaName", value=build_worklist_lambda.function_name
+        )
+        CfnOutput(
+            self, "SummarizeRunLambdaName", value=summarize_run_lambda.function_name
         )

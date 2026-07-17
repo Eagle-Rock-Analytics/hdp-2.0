@@ -5,6 +5,7 @@ This directory contains AWS CDK infrastructure for HDP Phase 2.
 ## gh5.9 scope
 - DynamoDB tables: `hdp-watermarks`, `hdp-run-history`
 - Lambda: `build-worklist`
+- Lambda: `summarize-run` (aggregates per-run status for notify)
 - Seeder script: populates `hdp-watermarks` from `s3://auto-hdp/hdp/ASOSAWOS/`
 
 ## gh5.4 / orchestration scope
@@ -12,6 +13,14 @@ This directory contains AWS CDK infrastructure for HDP Phase 2.
 - Step Functions state machine: `hdp-phase2-state-machine`
 - Per-station workflow from `build-worklist` `work_items`
 - Explicit NOOP handling for stage exit code `3` via failure catch-and-route
+
+## gh5.5 orchestration scope
+- Added pull stage (`GHCNh_pull.py`) before clean/qaqc/merge in per-station fanout
+- Added per-stage run-history updates in `hdp-run-history` rows keyed by (`run_id`, `station_id`)
+- Added one retry policy for transient Step Functions task failures
+- Added watermark updates after successful merge
+- Added `stationlist-update` single Batch stage (`stnlist_update_merge.py ASOSAWOS`)
+- Added notify stage via `hdp-summarize-run` Lambda and fail-for-investigation post-fanout
 
 ## Deploy
 Set account and region:

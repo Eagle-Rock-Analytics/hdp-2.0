@@ -181,6 +181,12 @@ class HdpComputeStack(Stack):
             ["run-merge", "--help"],
             memory=4096,
         )
+        stationlist_job = create_job_def(
+            "HdpStationlistJobDef",
+            "hdp-stationlist-job",
+            ["python", "--version"],
+            memory=4096,
+        )
 
         CfnOutput(self, "BatchComputeEnvironmentName", value=compute_env.ref)
         CfnOutput(self, "BatchJobQueueName", value=job_queue.ref)
@@ -188,3 +194,4 @@ class HdpComputeStack(Stack):
         CfnOutput(self, "CleanJobDefinitionArn", value=clean_job.ref)
         CfnOutput(self, "QaqcJobDefinitionArn", value=qaqc_job.ref)
         CfnOutput(self, "MergeJobDefinitionArn", value=merge_job.ref)
+        CfnOutput(self, "StationlistJobDefinitionArn", value=stationlist_job.ref)
