@@ -50,7 +50,6 @@ from paths import (
     PUBLISH_PREFIX,
     QAQC_APPEND,
     QAQC_WX,
-    SOURCE_BUCKET,
     STATIONS_CSV_PATH,
 )
 from stage_exit_codes import StageExit
@@ -697,19 +696,15 @@ def run_merge_one_station(
 
         # Write the xarray Dataset as a Zarr file to the specified S3 path
         if append:
-            baseline_url = (
-                f"s3://{SOURCE_BUCKET}/{MERGE_WX}/{network_name}/{station}.zarr"
-            )
             publish_url = (
                 f"s3://{PUBLISH_BUCKET}/{PUBLISH_PREFIX}/{network_name}/{station}.zarr"
             )
             logger.info(
-                "Append mode baseline source: %s; publish target: %s",
-                baseline_url,
+                "Append mode baseline source (= publish target): %s",
                 publish_url,
             )
             ds_existing = read_published_merged_dataset(
-                SOURCE_BUCKET, MERGE_WX, network_name, station, logger
+                PUBLISH_BUCKET, PUBLISH_PREFIX, network_name, station, logger
             )
             if ds_existing is None:
                 logger.info(
