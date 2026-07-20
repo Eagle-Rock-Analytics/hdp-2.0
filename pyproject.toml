@@ -20,6 +20,7 @@ dependencies = [
     "netcdf4>=1.6",
     "numpy>=1.26",
     "pandas>=2.2",
+    "pyarrow>=14.0",
     "requests>=2.32",
     "s3fs>=2022.11",
     "s3transfer>=0.6",

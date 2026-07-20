@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Iterable
 
 import boto3
 
@@ -14,6 +14,20 @@ def _parse_iso(ts: str | None) -> datetime | None:
         return datetime.fromisoformat(ts_norm)
     except ValueError:
         return None
+
+
+def _normalize_station_ids(raw_station_ids: Any) -> list[str] | None:
+    if raw_station_ids is None:
+        return None
+    if isinstance(raw_station_ids, str):
+        station_ids = [item.strip() for item in raw_station_ids.split(",")]
+    elif isinstance(raw_station_ids, Iterable):
+        station_ids = [str(item).strip() for item in raw_station_ids]
+    else:
+        raise TypeError("station_ids must be a list or comma-delimited string")
+
+    normalized = [station_id for station_id in station_ids if station_id]
+    return normalized or None
 
 
 def _to_run_history_item(
@@ -45,6 +59,12 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         or f"manual-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     )
     network_filter = event.get("network", "ASOSAWOS")
+    station_id_filter = _normalize_station_ids(event.get("station_ids"))
+    selected_station_ids = set(station_id_filter or [])
+    max_stations_raw = event.get("max_stations")
+    max_stations = int(max_stations_raw) if max_stations_raw is not None else None
+    if max_stations is not None and max_stations < 1:
+        raise ValueError("max_stations must be >= 1")
 
     now = datetime.now(timezone.utc)
     threshold_epoch = now.timestamp() - freshness_days * 24 * 60 * 60
@@ -63,6 +83,8 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
             last_timestamp = item.get("last_timestamp", {}).get("S")
 
             if network != network_filter:
+                continue
+            if selected_station_ids and station_id not in selected_station_ids:
                 continue
 
             last_dt = _parse_iso(last_timestamp)
@@ -88,9 +110,34 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
             else:
                 work_items.append(base)
 
+    if station_id_filter:
+        order_lookup = {
+            station_id: index for index, station_id in enumerate(station_id_filter)
+        }
+        work_items.sort(
+            key=lambda item: order_lookup.get(item["station_id"], len(order_lookup))
+        )
+        no_ops.sort(
+            key=lambda item: order_lookup.get(item["station_id"], len(order_lookup))
+        )
+    else:
+        work_items.sort(key=lambda item: item["station_id"])
+        no_ops.sort(key=lambda item: item["station_id"])
+
+    if max_stations is not None:
+        selected_count = len(work_items)
+        work_items = work_items[:max_stations]
+        if selected_count > max_stations:
+            no_ops = []
+        else:
+            remaining = max_stations - len(work_items)
+            no_ops = no_ops[:remaining]
+
     result = {
         "run_id": run_id,
         "network": network_filter,
+        "requested_station_ids": station_id_filter or [],
+        "max_stations": max_stations,
         "total_station_count": len(work_items) + len(no_ops),
         "work_items": work_items,
         "no_ops": no_ops,

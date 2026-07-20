@@ -54,6 +54,28 @@ aws stepfunctions start-execution \
 	--profile neil.AE
 ```
 
+Targeted validation runs:
+
+```bash
+# One station
+aws stepfunctions start-execution \
+	--state-machine-arn <STATE_MACHINE_ARN> \
+	--name manual-one-$(date +%Y%m%dT%H%M%S) \
+	--input '{"network":"ASOSAWOS","station_ids":["ASOSAWOS_72092300310"]}' \
+	--region us-west-2 \
+	--profile neil.AE
+
+# Five stations in a fixed order
+aws stepfunctions start-execution \
+	--state-machine-arn <STATE_MACHINE_ARN> \
+	--name manual-five-$(date +%Y%m%dT%H%M%S) \
+	--input '{"network":"ASOSAWOS","station_ids":["ASOSAWOS_72092300310","ASOSAWOS_72290023188","ASOSAWOS_72386023169","ASOSAWOS_72483023183","ASOSAWOS_72606014738"]}' \
+	--region us-west-2 \
+	--profile neil.AE
+```
+
+`build-worklist` also accepts `max_stations` for capped sample runs when exact station IDs are not important.
+
 NOOP semantics:
 - Stage scripts return `0` (SUCCESS), `1` (FAILURE), or `3` (NOOP)
 - AWS Batch reports non-zero as task failure
