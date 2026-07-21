@@ -62,6 +62,39 @@ Dockerfile                # Single image for all pipeline entrypoints (to be cre
 
 Current ASOSAWOS bucket source for agent work: `s3://auto-hdp/hdp/ASOSAWOS/`
 
+### Phase 2 Context Lock (Mandatory Preflight)
+
+Before any manual Step Functions run, confirm the runtime context is coherent.
+Do not run if any check fails.
+
+```bash
+# 1) Identity and region
+aws sts get-caller-identity
+aws configure get region
+
+# 2) Rule and target wiring
+aws events describe-rule --name hdp-phase2-monthly
+aws events list-targets-by-rule --rule hdp-phase2-monthly
+
+# 3) Batch image + env consistency
+aws batch describe-job-definitions --job-definition-name hdp-pull-job --status ACTIVE \
+  --query 'jobDefinitions[0].[revision,containerProperties.image,containerProperties.environment]'
+aws batch describe-job-definitions --job-definition-name hdp-clean-job --status ACTIVE \
+  --query 'jobDefinitions[0].[revision,containerProperties.image,containerProperties.environment]'
+aws batch describe-job-definitions --job-definition-name hdp-qaqc-job --status ACTIVE \
+  --query 'jobDefinitions[0].[revision,containerProperties.image,containerProperties.environment]'
+aws batch describe-job-definitions --job-definition-name hdp-merge-job --status ACTIVE \
+  --query 'jobDefinitions[0].[revision,containerProperties.image,containerProperties.environment]'
+```
+
+Expected for ASOSAWOS private rollout:
+- `HDP_STAGING_BUCKET=hdp-staging-pull`
+- `HDP_SOURCE_BUCKET=auto-hdp`
+- `HDP_PUBLISH_BUCKET=auto-hdp`
+- `HDP_PUBLISH_PREFIX=hdp`
+
+If `HDP_SOURCE_BUCKET` does not point at the publish baseline source, append merges can truncate history.
+
 ### AWS S3 Layout
 
 | Stage | Prefix | Bucket |
@@ -104,6 +137,10 @@ sbatch run_qaqc_LOXWFO.sh
 python scripts/3_qaqc_data/stnlist_update_qaqc.py <NETWORK>   # or run_stnlist_update_qaqc.sh for all
 python scripts/4_merge_data/stnlist_update_merge.py <NETWORK>  # or run_stnlist_update_merge.sh for all
 ```
+
+For Phase 2 ASOSAWOS runs where QAQC stationlist files may be absent from staging,
+`stnlist_update_merge.py` must tolerate missing `stationlist_{NETWORK}_qaqc.csv` and
+fallback to merged IDs from the publish prefix.
 
 ### Phase 2 Docker entrypoints (once containerized)
 ```bash
@@ -196,8 +233,27 @@ Parquet files by station and year from the NCEI endpoint.
 - **ASOSAWOS precip units** — the attribute must be explicitly set to `"mm"` after merge (known data artifact).
 - **`STATIONS_CSV_PATH`** — the full station list lives at `s3://wecc-historical-wx/2_clean_wx/temp_clean_all_station_list.csv`.
 - **`MERGE_pipeline.py` line ~757** — hardcoded merge bucket reference; must use `paths.py` constants.
+- **Context mismatch can delete baseline history** — if runtime env points merge append at the wrong baseline bucket/prefix, full historical periods can be overwritten with only new slices. Always validate source/publish env vars and run an xarray range check after manual tests.
 - **Cross-account writes to `cadcat`** — requires bucket policy on the `cadcat` bucket granting the pipeline IAM role `s3:PutObject`. Confirm with Neil before running Phase 1.
 - **Staging bucket TTL** — `hdp-staging-pull` and `hdp-staging-qaqc` have 30-day lifecycle rules. Don't rely on them for long-lived data.
+
+### Post-run Integrity Guardrail (Required)
+
+After every 1-station or 5-station manual test, verify published zarr date ranges:
+
+```bash
+python - <<'PY'
+import xarray as xr
+stations=["ASOSAWOS_69007093217","ASOSAWOS_72012200114","ASOSAWOS_72019300117","ASOSAWOS_72020200118","ASOSAWOS_72025400119"]
+for s in stations:
+  ds=xr.open_zarr(f"s3://auto-hdp/hdp/ASOSAWOS/{s}.zarr", consolidated=False)
+  t=ds.time.values
+  print(s, str(t.min()), str(t.max()), len(t))
+  ds.close()
+PY
+```
+
+If a station start date jumps forward unexpectedly, stop and restore from backup before further runs.
 
 ---
 
@@ -207,7 +263,7 @@ Once Phase 1 is complete, the `infra/` directory will contain CDK stacks (Python
 
 | Stack | Contents |
 |---|---|
-| `BucketsStack` | `hdp-staging-pull`, `hdp-staging-qaqc` with lifecycle rules; bucket policy on `cadcat` |
+| `BucketsStack` | `hdp-staging-pull`, `hdp-staging-qaqc` with lifecycle rules; private rollout policy aligned to `auto-hdp` publish target (`cadcat` deferred) |
 | `ComputeStack` | AWS Batch compute environment (EC2 Spot, `c7i-flex`, `m7i-flex` — amd64 only; `c7g`/arm64 deferred to scale-up), job queue, 3 job definitions |
 | `OrchestratorStack` | Step Functions state machine (pull → diff → clean → QAQC → merge → notify) |
 | `ScheduleStack` | EventBridge monthly cron (`0 8 1 * ? *`), SNS alert topic, CloudWatch dashboard |

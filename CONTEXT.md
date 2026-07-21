@@ -40,6 +40,19 @@ A scheduled automation run that completes without processing any stations becaus
 the pull and diff stages found zero touched stations. This is considered a
 successful outcome when source freshness remains within the expected lag window.
 
+## context lock (Phase 2)
+A required preflight check before manual or scheduled runs that verifies AWS
+identity/region, EventBridge rule target wiring, and active Batch job-definition
+environment values (`HDP_STAGING_BUCKET`, `HDP_SOURCE_BUCKET`,
+`HDP_PUBLISH_BUCKET`, `HDP_PUBLISH_PREFIX`). This prevents append runs from
+reading/writing against mismatched buckets.
+
+## baseline truncation regression
+A failure mode where append merge writes only the new slice and drops the full
+historical baseline in the publish zarr. Typical trigger is context drift in
+source/publish bucket settings at runtime. Detection: station start timestamp
+jumps forward unexpectedly in post-run xarray checks.
+
 ---
 
 # GHCNh — ISD Successor Dataset

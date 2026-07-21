@@ -80,6 +80,28 @@ Pipeline stages, each in `scripts/<stage>/`:
 
 `scripts/paths.py` is env-var driven — all bucket names come from env vars (`HDP_STAGING_BUCKET` (legacy alias `HDP_BUCKET`), `HDP_PUBLISH_BUCKET`, `HDP_PUBLISH_PREFIX`). Never hardcode S3 paths.
 
+## Phase 2 Safety Checks (Required)
+
+Before running Step Functions or Batch tests, verify runtime context:
+
+```bash
+aws sts get-caller-identity
+aws configure get region
+aws events describe-rule --name hdp-phase2-monthly
+aws batch describe-job-definitions --job-definition-name hdp-merge-job --status ACTIVE \
+   --query 'jobDefinitions[0].[containerProperties.image,containerProperties.environment]'
+```
+
+Expected env for current ASOSAWOS private rollout:
+- `HDP_STAGING_BUCKET=hdp-staging-pull`
+- `HDP_SOURCE_BUCKET=auto-hdp`
+- `HDP_PUBLISH_BUCKET=auto-hdp`
+- `HDP_PUBLISH_PREFIX=hdp`
+
+If `HDP_SOURCE_BUCKET` is wrong, append merge can overwrite baseline history.
+
+After manual runs, verify date ranges with xarray and confirm station starts did not jump forward.
+
 ## Conventions & Patterns
 
 - Run scripts from `scripts/<stage>/` directory so relative log paths resolve correctly

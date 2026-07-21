@@ -8,4 +8,5 @@
 See also:
 - [../CONTEXT.md](../CONTEXT.md) — domain glossary and GHCNh technical reference
 - [../AGENTS.md](../AGENTS.md) — operational guidelines and gotchas
+- [../infra/README.md](../infra/README.md) — Phase 2 context-lock preflight, schedule controls, and post-run integrity checks
 - [../plan.md](../plan.md) — living project plan with phase status

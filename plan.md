@@ -24,6 +24,16 @@
   - Resubmitted after initial job 1 failed (missing venv at compute node time)
   - Jobs 19/25/27 now running with environment available
 
+### Operational safety updates (2026-07-21)
+
+- Incident observed and remediated: merge output for `ASOSAWOS_72020200118` temporarily truncated to 2026-only history due to runtime bucket/context mismatch during append workflow.
+- Controls added:
+  - Mandatory Phase 2 context-lock preflight (rule target + Batch image/env verification)
+  - Post-run xarray date-range integrity checks after one-station and five-station tests
+  - `stnlist_update_merge.py` hardened to read publish-path merged zarrs and tolerate missing QAQC stationlist in staging
+  - Batch image/version pin updated to runtime containing guardrails and stationlist fix
+- Recovery confirmed: restored full range for `ASOSAWOS_72020200118` to `2005-01-03T19:00` → `2026-07-19T14:00`.
+
 **Next:**
 - Monitor 16-station batch to completion (~60 min ETA)
 - Validate all 21 published stations in auto-hdp/hdp/ASOSAWOS/

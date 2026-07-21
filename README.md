@@ -22,6 +22,11 @@ The following figure shows the locations of all the stations (by network) that h
 And here you can see the number of observations throughout the project's time period:
 <img src="figures/merge_stations_over_time.png" alt="Merge stations over time" width="500"/>
 
+> HDP 2.0 private rollout note:
+> The public cadcat link above reflects the legacy public publication surface.
+> Current Phase 2 ASOSAWOS operational runs and validations in this repository
+> use s3://auto-hdp/hdp/ASOSAWOS/ with explicit context-lock preflight checks.
+
 ---
 
 ## 🗂 Repository Structure
@@ -46,6 +51,18 @@ historical-obs-platform/
 
 ## 🖥️ For developers: Running QAQC and MERGE steps
 
+### HDP 2.0 private Phase 2 context (critical)
+
+For ASOSAWOS private automation and manual validation runs, keep bucket context aligned:
+
+- `HDP_STAGING_BUCKET=hdp-staging-pull`
+- `HDP_SOURCE_BUCKET=auto-hdp`
+- `HDP_PUBLISH_BUCKET=auto-hdp`
+- `HDP_PUBLISH_PREFIX=hdp`
+
+If source/publish context is mismatched in append mode, merge can drop historical baseline periods.
+Always verify final station date ranges with xarray after manual test runs.
+
 1. Follow the instructions in the `pcluster` [README](https://github.com/Eagle-Rock-Analytics/historical-obs-platform/tree/main/scripts/pcluster/README.md) to **run QAQC for all networks** in an AWS pcluster environment.
 
 2. Run the **station list generation script** for each network (can be run locally). This uploads a `stationlist_{NETWORK}_qaqc.csv` file to the QAQC bucket in AWS, indicating when QAQC was run and whether each station passed or failed (Y/N), along with any relevant error messages:
@@ -65,7 +82,7 @@ historical-obs-platform/
 
 4. Follow the instructions in the `pcluster` [README](https://github.com/Eagle-Rock-Analytics/historical-obs-platform/tree/main/scripts/pcluster/README.md) to **run MERGE for all networks** in an AWS pcluster environment.
 
-5. Run the **merge station list generation script** for each network. This uploads a `stationlist_{NETWORK}_merge.csv` file to the merge bucket in AWS, indicating when the merge/hourly standardization was run and whether each station passed or failed (Y/N), along with any relevant error messages:
+5. Run the **merge station list generation script** for each network. In HDP 2.0 private ASOSAWOS flow, this publishes `stationlist_{NETWORK}_merge.csv` under the publish prefix (`s3://auto-hdp/hdp/{NETWORK}/`) and mirrors legacy location when configured, indicating when merge/hourly standardization was run and whether each station passed or failed (Y/N), along with any relevant error messages:
 ```bash
    # Single network
    python scripts/4_merge_data/stnlist_update_merge.py <NETWORK>

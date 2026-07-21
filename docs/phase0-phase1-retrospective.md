@@ -3,6 +3,10 @@
 > **Status:** Phase 0 (append-aware refactor) ✓ COMPLETE · Phase 1 ASOSAWOS catch-up ✓ COMPLETE
 > **Date:** 2026-06-23
 > **Author:** Engineering team (Eagle Rock Analytics)
+>
+> **2026-07 consistency note:** This retrospective includes legacy references to
+> public publish target `cadcat`. Current private Phase 2 ASOSAWOS operations run
+> against `s3://auto-hdp/hdp/ASOSAWOS/` with context-lock preflight checks.
 
 ---
 
@@ -25,6 +29,9 @@ The Historical Data Platform (HDP) collects, cleans, QA/QCs, and publishes hourl
 weather observations from ~15,000 stations across the western US, spanning 27
 distinct sensor networks. Processed output lands in `s3://cadcat/hdp/{NETWORK}/{STATION}.zarr`
 and powers downstream climate analytics workflows.
+
+For the current private HDP 2.0 rollout, operational publish/validation target is
+`s3://auto-hdp/hdp/ASOSAWOS/`.
 
 ### Why a v2 was needed
 The v1 pipeline (`historical-obs-platform`) was designed as a one-time batch

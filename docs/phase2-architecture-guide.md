@@ -122,6 +122,7 @@ Before starting Phase 2 implementation, the following must be in place:
 | P-5 | ECR repository created | Engineering | ○ |
 | P-6 | `hdp-staging-pull` and `hdp-staging-qaqc` buckets created | Engineering | ○ |
 | P-7 | CDK bootstrapped in target AWS account | Engineering | ○ |
+| P-8 | Batch job-definition env context lock verified (`HDP_STAGING_BUCKET`, `HDP_SOURCE_BUCKET`, `HDP_PUBLISH_BUCKET`, `HDP_PUBLISH_PREFIX`) | Engineering | ○ |
 
 ---
 
@@ -411,7 +412,8 @@ state-machine-level `FAILED` execution.
 from aws_cdk import aws_events as events, aws_events_targets as targets
 
 rule = events.Rule(
-    self, "HdpMonthlyRun",
+  self, "MonthlyPhase2Schedule",
+  rule_name="hdp-phase2-monthly",
     schedule=events.Schedule.cron(
         minute="0",
         hour="8",
@@ -426,10 +428,7 @@ rule = events.Rule(
 rule.add_target(targets.SfnStateMachine(
     state_machine,
     input=events.RuleTargetInput.from_object({
-        "networks": NETWORK_LIST,
-        "run_id": events.EventField.from_path("$.id"),
-        "run_date": events.EventField.from_path("$.time"),
-        "triggered_by": "eventbridge-monthly",
+    "network": "ASOSAWOS",
     }),
 ))
 ```
@@ -605,8 +604,8 @@ Phase 2 should not be scheduled until P1.6 passes:
 ```bash
 # Trigger state machine for the currently enabled rollout set
 aws stepfunctions start-execution \
-  --state-machine-arn arn:aws:states:us-west-2:<ACCOUNT>:stateMachine:HdpPipeline \
-  --input '{"networks": ["ASOSAWOS","HADS","CW3E"], "triggered_by": "manual"}' \
+  --state-machine-arn arn:aws:states:us-west-2:<ACCOUNT>:stateMachine:hdp-phase2-state-machine \
+  --input '{"network":"ASOSAWOS"}' \
   --profile neil.AE
 
 # Monitor execution
@@ -618,11 +617,47 @@ aws stepfunctions describe-execution \
 ### Pause or enable the monthly run
 ```bash
 # Disable EventBridge rule (does not delete it)
-aws events disable-rule --name HdpMonthlyRun --region us-west-2 --profile neil.AE
+aws events disable-rule --name hdp-phase2-monthly --region us-west-2 --profile neil.AE
 
 # Re-enable
-aws events enable-rule --name HdpMonthlyRun --region us-west-2 --profile neil.AE
+aws events enable-rule --name hdp-phase2-monthly --region us-west-2 --profile neil.AE
 ```
+
+### Context lock preflight (required)
+
+Before every manual execution and before enabling schedule:
+
+```bash
+aws events describe-rule --name hdp-phase2-monthly --region us-west-2 --profile neil.AE
+aws events list-targets-by-rule --rule hdp-phase2-monthly --region us-west-2 --profile neil.AE
+aws batch describe-job-definitions --job-definition-name hdp-merge-job --status ACTIVE \
+  --query 'jobDefinitions[0].[containerProperties.image,containerProperties.environment]' \
+  --region us-west-2 --profile neil.AE
+```
+
+Required environment in active job definitions:
+- `HDP_STAGING_BUCKET=hdp-staging-pull`
+- `HDP_SOURCE_BUCKET=auto-hdp`
+- `HDP_PUBLISH_BUCKET=auto-hdp`
+- `HDP_PUBLISH_PREFIX=hdp`
+
+If these drift, append merge may write only slice data and drop historical baseline.
+
+### Post-run dataset integrity check (required)
+
+```bash
+python - <<'PY'
+import xarray as xr
+stations=["ASOSAWOS_69007093217","ASOSAWOS_72012200114","ASOSAWOS_72019300117","ASOSAWOS_72020200118","ASOSAWOS_72025400119"]
+for s in stations:
+    ds=xr.open_zarr(f"s3://auto-hdp/hdp/ASOSAWOS/{s}.zarr", consolidated=False)
+    t=ds.time.values
+    print(s, str(t.min()), str(t.max()), len(t))
+    ds.close()
+PY
+```
+
+If a station start time unexpectedly jumps forward, stop further runs and restore baseline before proceeding.
 
 ### Checking for failed stations
 Failed stations are logged to CloudWatch Logs by the Batch jobs and to the per-run

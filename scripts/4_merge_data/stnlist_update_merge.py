@@ -34,7 +34,7 @@ import s3fs
 import xarray as xr
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from paths import BUCKET_NAME, MERGE_WX, QAQC_WX
+from paths import BUCKET_NAME, MERGE_WX, PUBLISH_BUCKET, PUBLISH_PREFIX, QAQC_WX
 
 # Set environment variables
 s3 = boto3.resource("s3")
@@ -56,10 +56,21 @@ def get_station_list(network: str) -> pd.DataFrame:
     station_list : pd.DataFrame
         station list of all stations within a network
     """
-    station_list = pd.read_csv(
+    stationlist_path = (
         f"s3://{BUCKET_NAME}/{QAQC_WX}/{network}/stationlist_{network}_qaqc.csv"
     )
-    return station_list
+    try:
+        station_list = pd.read_csv(stationlist_path)
+        return station_list
+    except FileNotFoundError:
+        print(
+            f"  [{datetime.now():%H:%M:%S}] {network}: Missing QAQC station list at {stationlist_path}. "
+            "Building fallback station list from merged zarr IDs."
+        )
+        merge_ids = get_merge_stations(network)
+        if merge_ids.empty:
+            return pd.DataFrame(columns=["ERA-ID"])
+        return pd.DataFrame({"ERA-ID": merge_ids["ID"].tolist()})
 
 
 def get_zarr_last_mod(fn: str) -> str:
@@ -76,13 +87,13 @@ def get_zarr_last_mod(fn: str) -> str:
         last modified date from within zarr
     """
 
-    # Grab only path name without extension or bucket name
-    path_no_ext = fn.split(".")[0]
-    path_no_bucket = path_no_ext.split(BUCKET_NAME)[-1][1:]
+    bucket, path_with_ext = fn.split("/", 1)
+    path_no_ext = path_with_ext.split(".zarr")[0]
+    zarr_prefix = f"{path_no_ext}.zarr"
 
     # idenitfy last_modified date from metadata date within .zarr
     mod_list = []
-    for item in s3.Bucket(BUCKET_NAME).objects.filter(Prefix=path_no_bucket):
+    for item in s3.Bucket(bucket).objects.filter(Prefix=zarr_prefix):
         mod_list.append(str(item.last_modified))
 
     # return most recent datetime value
@@ -114,8 +125,8 @@ def get_merge_stations(network: str) -> pd.DataFrame:
     """
     df = {"ID": [], "Time_Merge": [], "merged": []}  # Initialize results dictionary
 
-    # Construct the S3 path prefix for the network inside the QAQC folder
-    parent_s3_path = f"{BUCKET_NAME}/{MERGE_WX}/{network}"
+    # Construct the S3 path prefix where published merged zarrs live.
+    parent_s3_path = f"{PUBLISH_BUCKET}/{PUBLISH_PREFIX}/{network}"
 
     # Use s3fs to list all items under this path
     s3_fs = s3fs.S3FileSystem(anon=False)
@@ -178,7 +189,7 @@ def fix_start_end_dates(network: str, stations: pd.DataFrame) -> pd.DataFrame:
             # identify correct start/end date from station timestamps
             try:
                 ds = xr.open_zarr(
-                    f"s3://{BUCKET_NAME}/{MERGE_WX}/{network}/{id}.zarr",
+                    f"s3://{PUBLISH_BUCKET}/{PUBLISH_PREFIX}/{network}/{id}.zarr",
                     consolidated=False,
                 )
             except Exception:
@@ -274,13 +285,13 @@ def merge_qa(network: str):
 
     # Call functions
     print(
-        f"  [{datetime.now():%H:%M:%S}] {network}: Fetching QAQC station list from s3://{BUCKET_NAME}/{QAQC_WX}/{network}/..."
-    )
-    stations = get_station_list(network)  # grabs stationlist_qaqcd
-    print(
-        f"  [{datetime.now():%H:%M:%S}] {network}: Fetching merged stations from s3://{BUCKET_NAME}/{MERGE_WX}/{network}/..."
+        f"  [{datetime.now():%H:%M:%S}] {network}: Fetching merged stations from s3://{PUBLISH_BUCKET}/{PUBLISH_PREFIX}/{network}/..."
     )
     merge_ids = get_merge_stations(network)  # grabs stations that pass merge
+    print(
+        f"  [{datetime.now():%H:%M:%S}] {network}: Fetching QAQC station list from s3://{BUCKET_NAME}/{QAQC_WX}/{network}/..."
+    )
+    stations = get_station_list(network)  # grabs stationlist_qaqcd (or fallback)
     print(
         f"  [{datetime.now():%H:%M:%S}] {network}: Parsing error CSVs from s3://{BUCKET_NAME}/{MERGE_WX}/{network}/merge_errs/..."
     )
@@ -384,17 +395,26 @@ def merge_qa(network: str):
         )
 
     # Save station file to cleaned bucket
+    publish_key = f"{PUBLISH_PREFIX}/{network}/stationlist_{network}_merge.csv"
+    legacy_key = f"{MERGE_WX}/{network}/stationlist_{network}_merge.csv"
     print(
-        f"  [{datetime.now():%H:%M:%S}] {network}: Uploading to s3://{BUCKET_NAME}/{MERGE_WX}/{network}/stationlist_{network}_merge.csv..."
+        f"  [{datetime.now():%H:%M:%S}] {network}: Uploading to s3://{PUBLISH_BUCKET}/{publish_key}..."
     )
     new_buffer = StringIO()
     stations.to_csv(new_buffer, index=False)
     content = new_buffer.getvalue()
     s3_cl.put_object(
-        Bucket=BUCKET_NAME,
+        Bucket=PUBLISH_BUCKET,
         Body=content,
-        Key=f"{MERGE_WX}/{network}/stationlist_{network}_merge.csv",
+        Key=publish_key,
     )
+    # Backward-compatible mirror for legacy consumers.
+    if BUCKET_NAME != PUBLISH_BUCKET:
+        s3_cl.put_object(
+            Bucket=BUCKET_NAME,
+            Body=content,
+            Key=legacy_key,
+        )
     print(f"  [{datetime.now():%H:%M:%S}] {network}: Done.")
 
 

@@ -2,6 +2,37 @@
 
 This directory contains AWS CDK infrastructure for HDP Phase 2.
 
+## Mandatory preflight: context lock
+
+Run these checks before every manual execution or schedule change:
+
+```bash
+aws sts get-caller-identity --region us-west-2 --profile neil.AE
+aws events describe-rule --name hdp-phase2-monthly --region us-west-2 --profile neil.AE
+aws events list-targets-by-rule --rule hdp-phase2-monthly --region us-west-2 --profile neil.AE
+
+aws batch describe-job-definitions --job-definition-name hdp-pull-job --status ACTIVE \
+	--query 'jobDefinitions[0].[containerProperties.image,containerProperties.environment]' \
+	--region us-west-2 --profile neil.AE
+aws batch describe-job-definitions --job-definition-name hdp-clean-job --status ACTIVE \
+	--query 'jobDefinitions[0].[containerProperties.image,containerProperties.environment]' \
+	--region us-west-2 --profile neil.AE
+aws batch describe-job-definitions --job-definition-name hdp-qaqc-job --status ACTIVE \
+	--query 'jobDefinitions[0].[containerProperties.image,containerProperties.environment]' \
+	--region us-west-2 --profile neil.AE
+aws batch describe-job-definitions --job-definition-name hdp-merge-job --status ACTIVE \
+	--query 'jobDefinitions[0].[containerProperties.image,containerProperties.environment]' \
+	--region us-west-2 --profile neil.AE
+```
+
+Expected env values for the private ASOSAWOS rollout:
+- `HDP_STAGING_BUCKET=hdp-staging-pull`
+- `HDP_SOURCE_BUCKET=auto-hdp`
+- `HDP_PUBLISH_BUCKET=auto-hdp`
+- `HDP_PUBLISH_PREFIX=hdp`
+
+If source/publish context drifts, append merge can overwrite baseline history.
+
 ## gh5.9 scope
 - DynamoDB tables: `hdp-watermarks`, `hdp-run-history`
 - Lambda: `build-worklist`
@@ -47,7 +78,7 @@ Start an execution (manual trigger):
 
 ```bash
 aws stepfunctions start-execution \
-	--state-machine-arn <STATE_MACHINE_ARN> \
+	--state-machine-arn arn:aws:states:us-west-2:<ACCOUNT>:stateMachine:hdp-phase2-state-machine \
 	--name manual-$(date +%Y%m%dT%H%M%S) \
 	--input '{"network":"ASOSAWOS"}' \
 	--region us-west-2 \
@@ -59,7 +90,7 @@ Targeted validation runs:
 ```bash
 # One station
 aws stepfunctions start-execution \
-	--state-machine-arn <STATE_MACHINE_ARN> \
+	--state-machine-arn arn:aws:states:us-west-2:<ACCOUNT>:stateMachine:hdp-phase2-state-machine \
 	--name manual-one-$(date +%Y%m%dT%H%M%S) \
 	--input '{"network":"ASOSAWOS","station_ids":["ASOSAWOS_72092300310"]}' \
 	--region us-west-2 \
@@ -67,7 +98,7 @@ aws stepfunctions start-execution \
 
 # Five stations in a fixed order
 aws stepfunctions start-execution \
-	--state-machine-arn <STATE_MACHINE_ARN> \
+	--state-machine-arn arn:aws:states:us-west-2:<ACCOUNT>:stateMachine:hdp-phase2-state-machine \
 	--name manual-five-$(date +%Y%m%dT%H%M%S) \
 	--input '{"network":"ASOSAWOS","station_ids":["ASOSAWOS_72092300310","ASOSAWOS_72290023188","ASOSAWOS_72386023169","ASOSAWOS_72483023183","ASOSAWOS_72606014738"]}' \
 	--region us-west-2 \
@@ -86,3 +117,28 @@ NOOP semantics:
 cd /home/nschroed/Work/hdp-2.0
 python3 infra/scripts/seed_watermarks.py --profile neil.AE --region us-west-2
 ```
+
+## Schedule controls
+
+```bash
+aws events disable-rule --name hdp-phase2-monthly --region us-west-2 --profile neil.AE
+aws events enable-rule --name hdp-phase2-monthly --region us-west-2 --profile neil.AE
+```
+
+## Post-run integrity check (required)
+
+Validate date ranges after one-station or five-station tests:
+
+```bash
+python - <<'PY'
+import xarray as xr
+stations=["ASOSAWOS_69007093217","ASOSAWOS_72012200114","ASOSAWOS_72019300117","ASOSAWOS_72020200118","ASOSAWOS_72025400119"]
+for s in stations:
+	ds=xr.open_zarr(f"s3://auto-hdp/hdp/ASOSAWOS/{s}.zarr", consolidated=False)
+	t=ds.time.values
+	print(s, str(t.min()), str(t.max()), len(t))
+	ds.close()
+PY
+```
+
+If a station start date jumps forward unexpectedly, stop and restore baseline before further runs.

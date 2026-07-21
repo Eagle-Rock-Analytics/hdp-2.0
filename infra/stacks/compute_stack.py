@@ -14,7 +14,7 @@ class HdpComputeStack(Stack):
 
         account = Stack.of(self).account
         region = Stack.of(self).region
-        image_uri = f"{account}.dkr.ecr.{region}.amazonaws.com/hdp:2.0.2"
+        image_uri = f"{account}.dkr.ecr.{region}.amazonaws.com/hdp:2.0.4"
 
         vpc = ec2.Vpc.from_lookup(self, "DefaultVpc", is_default=True)
         try:
