@@ -1175,17 +1175,29 @@ def run_qaqc_one_station(
 
     ## ======== BASIC SETUP ========
 
-    # Read in csv file containing information about each station
-    stations_df = pd.read_csv(STATIONS_CSV_PATH)
-    station_row = stations_df[stations_df["era-id"] == station]
+    # Look up the station's network, preferring the master station-list CSV
+    # but falling back to the "{NETWORK}_{id}" era-id convention if that
+    # (ephemeral, staging-bucket-hosted) file is unavailable.
+    network = None
+    try:
+        stations_df = pd.read_csv(STATIONS_CSV_PATH)
+        station_row = stations_df[stations_df["era-id"] == station]
+        if len(station_row) > 0:
+            network = station_row["network"].item()
+    except FileNotFoundError:
+        print(
+            f"STATIONS_CSV_PATH not found at {STATIONS_CSV_PATH}; "
+            "falling back to era-id network prefix."
+        )
 
-    # Check that the input station exists in the station list :)
-    if len(station_row) == 0:
+    if network is None:
+        network = station.split("_", 1)[0] if "_" in station else None
+
+    if not network:
         print(f"No file found in records for station {station}.")
         return StageExit.FAILURE
 
-    # Get the network and directories for network data in AWS
-    network = station_row["network"].item()
+    # Get the directories for network data in AWS
     raw_data_dir, cleaned_data_dir, qaqc_dir, merge_dir = get_file_paths(network)
 
     # Set zarr argument
