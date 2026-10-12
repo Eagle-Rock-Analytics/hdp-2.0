@@ -33,6 +33,13 @@ Expected env values for the private ASOSAWOS rollout:
 
 If source/publish context drifts, append merge can overwrite baseline history.
 
+`HdpStateStack` manages the lifecycle configuration on the externally owned
+`hdp-staging-pull` bucket. Its 30-day expiration applies only to the four
+ASOSAWOS pipeline prefixes (`1_raw_wx`, `2_clean_wx`, `3_qaqc_wx_v2`, and
+`4_merge_wx_v2` under `ASOSAWOS/`). Static reference data in `0_maps/` and the
+root-level `2_clean_wx/temp_clean_all_station_list.csv` are intentionally
+outside those filters and must be provisioned there durably.
+
 ## gh5.9 scope
 - DynamoDB tables: `hdp-watermarks`, `hdp-run-history`
 - Lambda: `build-worklist`

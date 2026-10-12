@@ -11,12 +11,61 @@ from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sns_subscriptions as subs
+from aws_cdk import custom_resources as cr
 from constructs import Construct
 
 
 class HdpStateStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        staging_bucket = "hdp-staging-pull"
+        staging_prefixes = [
+            "1_raw_wx/ASOSAWOS/",
+            "2_clean_wx/ASOSAWOS/",
+            "3_qaqc_wx_v2/ASOSAWOS/",
+            "4_merge_wx_v2/ASOSAWOS/",
+        ]
+        lifecycle_configuration = {
+            "Rules": [
+                {
+                    "ID": f"ExpireAfter30Days-{prefix.strip('/').replace('/', '-')}"[
+                        :255
+                    ],
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": prefix},
+                    "Expiration": {"Days": 30},
+                }
+                for prefix in staging_prefixes
+            ]
+        }
+        lifecycle_call = cr.AwsSdkCall(
+            service="S3",
+            action="putBucketLifecycleConfiguration",
+            parameters={
+                "Bucket": staging_bucket,
+                "LifecycleConfiguration": lifecycle_configuration,
+            },
+            physical_resource_id=cr.PhysicalResourceId.of(
+                "hdp-staging-pull-lifecycle-v2"
+            ),
+        )
+        cr.AwsCustomResource(
+            self,
+            "HdpStagingBucketLifecycle",
+            on_create=lifecycle_call,
+            on_update=lifecycle_call,
+            policy=cr.AwsCustomResourcePolicy.from_statements(
+                [
+                    iam.PolicyStatement(
+                        actions=["s3:PutLifecycleConfiguration"],
+                        resources=[f"arn:aws:s3:::{staging_bucket}"],
+                    )
+                ]
+            ),
+            removal_policy=RemovalPolicy.RETAIN,
+            install_latest_aws_sdk=False,
+        )
 
         watermark_table = dynamodb.Table(
             self,
